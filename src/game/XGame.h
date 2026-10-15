@@ -72,7 +72,7 @@ public:
     const char* MusicSource() const override { return midiList ? midiList->CurrentSource() : ""; }
 
     int currentLevel;
-    int maxSelLevel;              // real progress (saved to the registry, shared with Hopmon.exe)
+    int maxSelLevel;              // real progress (saved in <save dir>/original/progress.ini)
     int SelectableLevel() const;  // highest level offered on level select (cheat-aware)
     const int maxFreeLevel;
     const int maxLevel;
@@ -189,6 +189,10 @@ public:
     JSprite* textUnreg;
     JSprite* textLevel;
     JSprite* levelLED;
+    // Native: arrows at the ends of the level row when a pack has more levels than fit (the
+    // row scrolls with the selection); the same artwork as the level-choice arrows
+    JSprite* rowArrowLeft;
+    JSprite* rowArrowRight;
     JNumber* numLevel;
     int cursorPos;
     int inSelectLevel;

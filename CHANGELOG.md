@@ -3,6 +3,25 @@
 All notable changes to Hopmon Native. Versions follow [semantic versioning](https://semver.org/):
 MAJOR for incompatible changes, MINOR for new features, PATCH for fixes.
 
+## [1.2.0] - 2026-10-15
+
+### Added
+- Level select is ready for level packs longer than the original 45 levels: the row of level
+  lights shows 45 at a time and scrolls with the selected level, with arrows at the ends when more
+  levels are off to either side. Level numbers past 99 are shown in full on level select and in
+  the in-level display. With the original game nothing looks different.
+
+### Changed
+- Saved progress is no longer stored in the Windows registry. It's now a text file in your user
+  folder, `%APPDATA%\HopmonNative\saves\original\progress.ini`, like most PC games. The new
+  `save_path` setting in `[game]` moves it anywhere else, including next to the game
+  (`save_path = save`). On the first start, the progress you have from the original game is
+  copied over once; the original Hopmon.exe keeps its own progress in the registry, untouched.
+- Saves are written safely: a new save only replaces the old one once it has been written in
+  full, the previous save is kept as `progress.bak`, and a damaged save is restored from it.
+- Changing `save_path` copies your saves to the new folder on the next start.
+- Reset all settings keeps `save_path`.
+
 ## [1.1.0] - 2026-10-15
 
 ### Added

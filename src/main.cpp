@@ -2,6 +2,7 @@
 #include "core/assets.h"
 #include "core/config.h"
 #include "core/log.h"
+#include "core/saves.h"
 #include "audio/audio.h"
 #include "audio/midi.h"
 #include "audio/music_stream.h"
@@ -126,6 +127,7 @@ int main(int argc, char** argv) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD)) {
         FatalError("Hopmon", "SDL initialisation failed: %s", SDL_GetError());
     }
+    Saves::Init();
     std::string err;
     if (!Assets::Init(gamePath, allowUnverified, &err)) FatalError("Hopmon", "%s", err.c_str());
     Audio::Init();

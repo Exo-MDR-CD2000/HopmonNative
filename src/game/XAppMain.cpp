@@ -1,5 +1,6 @@
 // Port of XAppMain.cpp / XRegister.cpp
 #include "XGame.h"
+#include "../core/saves.h"
 #include "../core/config.h"
 #include "../core/log.h"
 #include "../framework/d3dtextr.h"
@@ -121,25 +122,41 @@ XApplication::~XApplication() {
 }
 
 // Native addition: [cheats] unlock_all_levels widens what the level-select screen offers without
-// touching maxSelLevel, so the progress saved to the registry stays the player's real progress.
+// touching maxSelLevel, so the saved progress stays the player's real progress.
 int XApplication::SelectableLevel() const { return GetConfig().unlockAllLevels ? maxLevel : maxSelLevel; }
 
+// Native: progress lives in <save dir>/original/progress.ini (see core/saves.h) instead of the
+// registry key HKCU\Software\SaitoGames\Hopmon that the original used. On the very first start
+// with no saved progress, the original's registry value is imported once (read only, so the
+// original Hopmon.exe keeps its own progress untouched).
 void XApplication::LoadWinRegData() {
     LoadRegisterInfo("Software\\SaitoGames\\Hopmon");
-    JWinReg winReg;
-    winReg.Create(JString("Software\\SaitoGames\\Hopmon"));
-    WORD level = 0;
-    winReg.GetWord(JString("Level"), &level);
-    maxSelLevel = level;
+    maxSelLevel = 0;
+    Saves::PackSave save;
+    if (Saves::Load("original", &save)) {
+        maxSelLevel = save.GetInt("progress", "unlocked", 1) - 1;
+    } else {
+        int legacy = 0;
+        if (Saves::TakeLegacyLevelOnce(&legacy) && legacy >= 0 && legacy <= maxLevel) {
+            maxSelLevel = legacy;
+            Log("Saves: imported progress from the original game (level %d unlocked)", legacy + 1);
+            SaveWinRegData();
+        }
+    }
     if (maxSelLevel < 0 || maxSelLevel > maxLevel) maxSelLevel = 0;
 }
 
 void XApplication::SaveWinRegData() {
     SaveRegisterInfo("Software\\SaitoGames\\Hopmon");
-    JWinReg winReg;
-    winReg.Create(JString("Software\\SaitoGames\\Hopmon"));
-    WORD level = (WORD)maxSelLevel;
-    winReg.SetWord(JString("Level"), &level);
+    Saves::PackSave save;
+    if (!Saves::Load("original", &save)) {
+        save = Saves::PackSave();
+        save.pack = "original";
+    }
+    save.pack = "original";
+    save.packVersion = "1";
+    save.SetInt("progress", "unlocked", maxSelLevel + 1);
+    Saves::Store(save);
 }
 
 HRESULT XApplication::Create(const std::vector<std::string>& args) {

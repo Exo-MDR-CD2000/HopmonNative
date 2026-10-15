@@ -112,6 +112,7 @@ bool Config::Load(const std::string& file) {
             else seen = before;
         } else if (section == "game") {
             if (k == "path") gamePath = v;
+            else if (k == "save_path") savePath = v;
             else seen = before;
         } else {
             seen = before;
@@ -150,6 +151,14 @@ bool Config::Save() const {
       "; Where your original Hopmon.exe is. Leave empty to look next to this program\n"
       "; (and in the current folder). Example: path = D:\\Games\\Hopmon\\Hopmon.exe\n");
     fprintf(f, "path = %s\n\n", gamePath.c_str());
+    P("; save_path: where saved progress is kept. Leave empty for the default:\n"
+      ";   %APPDATA%\\HopmonNative\\saves on Windows, ~/.local/share/HopmonNative/saves on Linux.\n"
+      ";   A relative path is relative to this program's folder (save_path = save keeps\n"
+      ";   saves in a 'save' folder next to it); %NAME% environment variables work.\n"
+      ";   Example: save_path = D:\\Games\\Hopmon saves\n"
+      ";   When you change it, existing saves are copied to the new folder on the next\n"
+      ";   start (the old copies are left in place).\n");
+    fprintf(f, "save_path = %s\n\n", savePath.c_str());
 
     P("[video]\n"
       "; width / height: window size in pixels when fullscreen = 0 (the window can\n"

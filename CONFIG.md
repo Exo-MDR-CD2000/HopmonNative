@@ -18,7 +18,7 @@ time it runs. Every setting is also explained in comments inside the file itself
 - **Unknown or misspelled settings** are ignored and listed in `hopmon_native.log`. Check the log when a
   change seems to have no effect.
 - **To restore every default**, choose **Reset all settings** in the pause menu, or delete the file.
-  Both keep your saved progress. The menu option also keeps `[game] path`.
+  Both keep your saved progress. The menu option also keeps `[game] path` and `save_path`.
 - **Older files are updated automatically.** When a file comes from an earlier build (its
   `config_version` is lower or missing), it is rewritten on the next start with the current
   comments and any new settings, and your values are kept.
@@ -38,7 +38,24 @@ speed of 100 logic steps per second.
 |---|---|---|---|
 | `path` | a file path, or empty | empty | Where your original `Hopmon.exe` is. When empty, the game looks next to `HopmonNative.exe` and in the current folder. Example: `path = D:\Games\Hopmon\Hopmon.exe` |
 
+| `save_path` | a folder, or empty | empty | Where saved progress is kept. When empty: `%APPDATA%\HopmonNative\saves` on Windows, `~/.local/share/HopmonNative/saves` on Linux. A relative path is relative to `HopmonNative.exe`'s folder, so `save_path = save` keeps saves in a `save` folder next to the game. `%NAME%` environment variables work: `save_path = %USERPROFILE%\Documents\Hopmon saves`. |
+
 The music files (`Music01.mid` to `Music04.mid`) are always loaded from the same folder as `Hopmon.exe`.
+
+### Saved progress
+
+- **One file per campaign:** the original 45 levels are in `saves\original\progress.ini`, a short
+  text file holding the highest level you've unlocked. The previous version is kept as
+  `progress.bak`.
+- **Changing `save_path`:** on the next start, your saves are copied to the new folder if it has none
+  yet. The old copies are left where they were. If the new folder already has saves, those are
+  used and nothing is copied.
+- **Damaged file:** if `progress.ini` can't be read, the game restores `progress.bak`, keeps the
+  damaged file as `progress.damaged`, and notes it in `hopmon_native.log`.
+- **Starting over:** delete `progress.ini` (or the whole `saves` folder). Your progress from the
+  original game is only imported on the very first start, so it won't come back.
+- **The original game:** Hopmon Native never writes to the Windows registry. The original Hopmon.exe
+  keeps its progress there, unchanged.
 
 ---
 

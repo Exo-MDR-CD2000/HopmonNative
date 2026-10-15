@@ -184,7 +184,8 @@ void XRegisterInfoObject::Render() {
 XSelectLevelObject::XSelectLevelObject(XApplication* a)
     : XProcessObject(a), camera(nullptr), background(nullptr), map(nullptr), cursorLeft(nullptr),
       cursorRight(nullptr), cursor2Left(nullptr), cursor2Right(nullptr), textUnreg(nullptr), textLevel(nullptr),
-      levelLED(nullptr), numLevel(nullptr), cursorPos(-1), inSelectLevel(0) {
+      levelLED(nullptr), rowArrowLeft(nullptr), rowArrowRight(nullptr), numLevel(nullptr), cursorPos(-1),
+      inSelectLevel(0) {
     menuItems[0] = menuItems[1] = menuItems[2] = nullptr;
     app->GetMidiList()->Play(0);
     JSurfaceList* sl = app->GetSurfaceList();
@@ -204,6 +205,7 @@ XSelectLevelObject::XSelectLevelObject(XApplication* a)
     numLevel = new JNumber(sl, 0xba, 10);
     numLevel->SetDisplayZero(1);
     numLevel->SetNumDigits(2);
+    numLevel->SetShowAllDigits(true);
     background = new XTitleBackground(app);
     cursorLeft = new JSprite(sl, 0xd0, 2);
     cursorRight = new JSprite(sl, 0xd1, 2);
@@ -212,6 +214,8 @@ XSelectLevelObject::XSelectLevelObject(XApplication* a)
     textUnreg = new JSprite(sl, 0xf7, 1);
     textLevel = new JSprite(sl, 0xb9, 1);
     levelLED = new JSprite(sl, 0x140, 3);
+    rowArrowLeft = new JSprite(sl, 0xcf, 2);
+    rowArrowRight = new JSprite(sl, 0xce, 2);
     menuItems[0] = new JSprite(sl, 0xcd, 2);
     menuItems[1] = new JSprite(sl, 0xcc, 2);
     menuItems[2] = new JSprite(sl, 200, 2);
@@ -231,6 +235,8 @@ XSelectLevelObject::~XSelectLevelObject() {
     delete textUnreg;
     delete textLevel;
     delete levelLED;
+    delete rowArrowLeft;
+    delete rowArrowRight;
     for (auto*& m : menuItems) {
         delete m;
         m = nullptr;
@@ -338,22 +344,49 @@ void XSelectLevelObject::Render() {
     int cx = app->GetScreenWidth() / 2;
     int cy = app->GetScreenHeight() / 2;
     IDirectDrawSurface7* bb = app->GetBackBuffer();
-    textLevel->SetPosition(cx - 0x4c, cy - 200);
+    // "LEVEL nn" is centred; native: numbers longer than two digits shift it left to stay centred
+    numLevel->SetNumber(app->currentLevel + 1);
+    int extra = numLevel->GetWidth() - numLevel->GetDigitWidth() * 2;
+    textLevel->SetPosition(cx - 0x4c - extra / 2, cy - 200);
     textLevel->Draw(bb);
     int tw = textLevel->GetWidth();
-    numLevel->SetNumber(app->currentLevel + 1);
-    numLevel->SetPosition(cx - 0x44 + tw, cy - 0xc6);
+    numLevel->SetPosition(cx - 0x44 + tw - extra / 2, cy - 0xc6);
     numLevel->Draw(bb);
+    // Native: the row shows at most kRowLevels lights (the original's 45). Longer packs scroll the
+    // row to keep the selected level in view, with arrows at the ends where more levels are hidden.
+    // With 45 levels or fewer this draws exactly what the original did.
+    const int kRowLevels = 45;
+    const int total = app->maxLevel + 1;
+    const int shown = total < kRowLevels ? total : kRowLevels;
+    int first = 0;
+    if (total > kRowLevels) {
+        first = app->currentLevel - kRowLevels / 2;
+        if (first > total - kRowLevels) first = total - kRowLevels;
+        if (first < 0) first = 0;
+    }
     int ledW = levelLED->GetWidth();
-    int posX = cx - ((ledW / 4) * app->maxLevel) / 2;
+    int step = ledW / 4;
+    int rowX = cx - (step * (shown - 1)) / 2;
+    int posX = rowX;
     int numH = numLevel->GetHeight();
-    for (int i = 0; i <= app->maxLevel; i++) {
+    int rowY = cy - 0xb4 + numH;
+    for (int i = first; i < first + shown; i++) {
         if (i == app->currentLevel) levelLED->SetCurrentFrame(2);
         else if (app->SelectableLevel() < i) levelLED->SetCurrentFrame(0);
         else levelLED->SetCurrentFrame(1);
-        levelLED->SetPosition(posX, cy - 0xb4 + numH);
+        levelLED->SetPosition(posX, rowY);
         levelLED->Draw(bb);
-        posX = levelLED->GetWidth() / 4 + posX;
+        posX = step + posX;
+    }
+    if (first > 0) {
+        rowArrowLeft->SetCurrentFrame(0);
+        rowArrowLeft->SetPosition(rowX - rowArrowLeft->GetWidth() / 2 - 6, rowY - 2);
+        rowArrowLeft->Draw(bb);
+    }
+    if (first + shown < total) {
+        rowArrowRight->SetCurrentFrame(0);
+        rowArrowRight->SetPosition(rowX + step * (shown - 1) + step + 6, rowY - 2);
+        rowArrowRight->Draw(bb);
     }
     int menuY = cy + 0x6e;
     for (int i = 0; i < 3; i++) {

@@ -34,8 +34,13 @@ has the full history.
 3. Run `HopmonNative.exe`.
 
 The first launch creates two files next to the program: `hopmon_native.ini` (every option, with
-comments) and `hopmon_native.log`. Saved progress uses the same registry key as the original
-(`HKCU\Software\SaitoGames\Hopmon`), so unlocked levels carry over in both directions.
+comments) and `hopmon_native.log`.
+
+**Saved progress** is kept in your user folder, `%APPDATA%\HopmonNative\saves`, like most PC games;
+nothing is written to the Windows registry. To keep saves elsewhere, set `save_path` under `[game]`
+in the ini (for example `save_path = save` for a `save` folder next to the game). The first time
+you start Hopmon Native, it copies the progress you have from the original game; the original
+Hopmon.exe keeps its own progress untouched. Back up the `saves` folder to keep your progress.
 
 If the game is somewhere else, start with `--game "C:\path\to\Hopmon.exe"` or set `path =` under
 `[game]` in the ini.
@@ -143,7 +148,7 @@ On Linux and macOS, music needs a SoundFont: put `soundfont.sf2` next to the pro
 - **Assets.** These are read straight from the PE resources of `Hopmon.exe`, using `src/core`.
 
 ```
-src/core       PE resource reader, SHA-256, asset loading, config, logging
+src/core       PE resource reader, SHA-256, asset loading, config, saved progress, logging
 src/gfx        OpenGL loader and the Direct3D 7 / DirectDraw emulation layer
 src/audio      sound-effect mixer, MIDI sequencer, MP3/FLAC music streaming
 src/input      SDL3 keyboard/gamepad -> DirectInput-style state

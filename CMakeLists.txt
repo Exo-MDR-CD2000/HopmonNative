@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 # The project version is the single source of the program's version number: it is written into
 # the exe's version info (res/hopmon_native.rc), the log, and the release zip's name.
-project(HopmonNative VERSION 1.1.0 LANGUAGES C CXX)
+project(HopmonNative VERSION 1.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

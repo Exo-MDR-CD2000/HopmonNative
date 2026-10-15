@@ -90,89 +90,6 @@ int GetStringListFromResource(JStringList& list, int resId) {
     return 1;
 }
 
-// ============================================================== JWinReg
-JWinReg::JWinReg() {}
-JWinReg::~JWinReg() { Close(); }
-
-#if defined(_WIN32)
-int JWinReg::Create(const JString& key) {
-    Close();
-    HKEY k = nullptr;
-    LONG r = RegCreateKeyExA(HKEY_CURRENT_USER, key.c_str(), 0, nullptr, 0, KEY_ALL_ACCESS, nullptr, &k, nullptr);
-    key_ = k;
-    return r == ERROR_SUCCESS;
-}
-int JWinReg::Open(const JString& key) {
-    Close();
-    HKEY k = nullptr;
-    LONG r = RegOpenKeyExA(HKEY_CURRENT_USER, key.c_str(), 0, KEY_ALL_ACCESS, &k);
-    key_ = k;
-    return r == ERROR_SUCCESS;
-}
-int JWinReg::Close() {
-    if (key_) RegCloseKey((HKEY)key_);
-    key_ = nullptr;
-    return 1;
-}
-int JWinReg::SetDWord(const JString& name, DWORD value) {
-    if (!key_) return 0;
-    return RegSetValueExA((HKEY)key_, name.c_str(), 0, REG_DWORD, (const BYTE*)&value, sizeof value) == ERROR_SUCCESS;
-}
-int JWinReg::GetDWord(const JString& name, DWORD* value) {
-    if (!key_) return 0;
-    DWORD type = 0, size = sizeof(DWORD), v = 0;
-    if (RegQueryValueExA((HKEY)key_, name.c_str(), nullptr, &type, (BYTE*)&v, &size) != ERROR_SUCCESS) return 0;
-    *value = v;
-    return 1;
-}
-#else
-// Portable fallback: <prefpath>/registry.ini with "key\\name=value" lines
-static std::string RegFile() {
-    char* p = SDL_GetPrefPath("SaitoGames", "HopmonNative");
-    std::string s = p ? p : "./";
-    SDL_free(p);
-    return s + "registry.ini";
-}
-static std::map<std::string, DWORD> LoadReg() {
-    std::map<std::string, DWORD> m;
-    FILE* f = fopen(RegFile().c_str(), "r");
-    if (!f) return m;
-    char line[512];
-    while (fgets(line, sizeof line, f)) {
-        char* eq = strrchr(line, '=');
-        if (!eq) continue;
-        *eq = 0;
-        m[line] = (DWORD)strtoul(eq + 1, nullptr, 10);
-    }
-    fclose(f);
-    return m;
-}
-static void SaveReg(const std::map<std::string, DWORD>& m) {
-    FILE* f = fopen(RegFile().c_str(), "w");
-    if (!f) return;
-    for (auto& kv : m) fprintf(f, "%s=%u\n", kv.first.c_str(), (unsigned)kv.second);
-    fclose(f);
-}
-int JWinReg::Create(const JString& key) { path_ = key.str(); key_ = (void*)1; return 1; }
-int JWinReg::Open(const JString& key) { return Create(key); }
-int JWinReg::Close() { key_ = nullptr; return 1; }
-int JWinReg::SetDWord(const JString& name, DWORD value) {
-    if (!key_) return 0;
-    auto m = LoadReg();
-    m[path_ + "\\" + name.str()] = value;
-    SaveReg(m);
-    return 1;
-}
-int JWinReg::GetDWord(const JString& name, DWORD* value) {
-    if (!key_) return 0;
-    auto m = LoadReg();
-    auto it = m.find(path_ + "\\" + name.str());
-    if (it == m.end()) return 0;
-    *value = it->second;
-    return 1;
-}
-#endif
-
 // ============================================================== JSurface
 JSurface::JSurface(CD3DApplication* a, WORD id, int key)
     : app(a), resId(id), lpSurface(nullptr), width(-1), height(-1), useColorKey(key), colorKey(0xFFFFFFFF) {
@@ -337,7 +254,7 @@ void JNumber::Draw(IDirectDrawSurface7* dest) {
         }
     }
     for (int i = 0; i < len; i++) {
-        if (len - i <= numDigits) {
+        if (showAllDigits || len - i <= numDigits) {
             numberSprite->SetCurrentFrame(buffer[i] - '0');
             numberSprite->SetPosition(nx, posY);
             numberSprite->Draw(dest);
@@ -347,6 +264,12 @@ void JNumber::Draw(IDirectDrawSurface7* dest) {
 }
 
 int JNumber::GetDigitWidth() const { return numberSprite->GetWidth() / 3; }
+
+int JNumber::DigitCount() const {
+    char buffer[34];
+    int len = snprintf(buffer, sizeof buffer, "%ld", (long)number);
+    return (showAllDigits && len > numDigits) ? len : numDigits;
+}
 int JNumber::GetHeight() const { return numberSprite->GetHeight(); }
 
 // ============================================================== JSound

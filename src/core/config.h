@@ -49,6 +49,7 @@ struct Config {
     std::map<int, std::vector<std::string>> padBinds;  // joystick button index -> gamepad button names
 
     std::string gamePath;      // optional explicit path to Hopmon.exe
+    std::string savePath;      // [game] save_path: empty = the per-user data folder (see core/saves.h)
     // [cheats] (off by default; also in the pause menu)
     bool unlockAllLevels = false;     // every level selectable; saved progress is left untouched
     bool infiniteFireEnergy = false;  // fire gauge always full: fire on every press (max 3 shots on screen)
@@ -56,7 +57,7 @@ struct Config {
 
     std::string path;
     int version = 0;                    // config_version found in the file (0 = older file)
-    static constexpr int kCurrentVersion = 11;
+    static constexpr int kCurrentVersion = 12;
     bool Load(const std::string& file);
     bool Save() const;
 };

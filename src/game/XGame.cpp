@@ -20,6 +20,7 @@ XStatusDisplay::XStatusDisplay(XGameObject* g) : game(g) {
     numLevel->SetPosition(x + 0x14, 5);
     numLevel->SetDisplayZero(1);
     numLevel->SetNumDigits(2);
+    numLevel->SetShowAllDigits(true);
     x = x + 0x2c + numLevel->GetDigitWidth() * 2;
     textCrystals->SetPosition(x, 4);
     numCrystals->SetPosition(x + 8 + textCrystals->GetWidth(), 5);
@@ -46,7 +47,10 @@ void XStatusDisplay::Draw(IDirectDrawSurface7* dest) {
     textLevel->SetPosition(0xc - dx, 4);
     int x = textLevel->GetWidth();
     numLevel->SetPosition(x + 0x14 - dx, 5);
-    x = x + 0x2c + numLevel->GetDigitWidth() * 2;
+    // native: room for as many digits as the pack's highest level number (two for the original)
+    int levelDigits = 2;
+    for (int n = game->app->maxLevel + 1; n >= 100; n /= 10) levelDigits++;
+    x = x + 0x2c + numLevel->GetDigitWidth() * levelDigits;
     textCrystals->SetPosition(x - dx, 4);
     numCrystals->SetPosition(x + 8 + textCrystals->GetWidth() - dx, 5);
     textLevel->Draw(dest);

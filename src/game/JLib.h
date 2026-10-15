@@ -1,4 +1,4 @@
-// Ports of Hopmon's utility library: JList, JString, JStringList, JWinReg,
+// Ports of Hopmon's utility library: JList, JString, JStringList,
 // JSurface, JSprite, JAscii (JNumber), JSound, JMidi, JDinput.
 #pragma once
 #include "../core/d3dtypes.h"
@@ -71,29 +71,8 @@ private:
 int GetStringListFromResource(JStringList& list, int resId);
 
 // --------------------------------------------------------------- JWinReg.cpp
-// Persistent settings store. On Windows it uses the same registry key as the
-// original game (so progress is shared); elsewhere an ini file next to the port.
-class JWinReg {
-public:
-    JWinReg();
-    virtual ~JWinReg();
-    int Create(const JString& key);
-    int Open(const JString& key);
-    int Close();
-    int SetDWord(const JString& name, DWORD value);
-    int GetDWord(const JString& name, DWORD* value);
-    int SetWord(const JString& name, const WORD* value) { return SetDWord(name, *value); }
-    int GetWord(const JString& name, WORD* value) {
-        DWORD v = 0;
-        int ok = GetDWord(name, &v);
-        if (ok) *value = (WORD)v;
-        return ok;
-    }
-
-private:
-    void* key_ = nullptr;
-    std::string path_;
-};
+// Native: the original's registry wrapper (JWinReg) is gone. Progress is saved in files by
+// core/saves.h, and the original's registry value is only ever read, never written.
 
 // -------------------------------------------------------------- JSurface.cpp
 class JSurface {
@@ -187,12 +166,17 @@ public:
     void SetPosition(int x, int y) { posX = x; posY = y; }
     void SetDisplayZero(int z) { displayZero = z; }
     void SetNumDigits(int n) { numDigits = n; }
+    // Native: the original keeps only the last numDigits digits (99 + 1 shows "00"); level numbers
+    // switch this on so packs with 100+ levels show the whole number. Off = original behaviour.
+    void SetShowAllDigits(bool on) { showAllDigits = on; }
     void SetNumber(int n) { number = n; }
     void Draw(IDirectDrawSurface7* dest);
     int GetPosX() const { return posX; }
     int GetPosY() const { return posY; }
     int GetDigitWidth() const;
-    int GetWidth() const { return GetDigitWidth() * numDigits; }
+    // Native: covers every digit actually drawn (the original only ever had two-digit numbers)
+    int GetWidth() const { return GetDigitWidth() * DigitCount(); }
+    int DigitCount() const;
     int GetHeight() const;
 
 protected:
@@ -201,6 +185,7 @@ protected:
     int displayZero;
     int numDigits;
     int number;
+    bool showAllDigits = false;
 };
 
 // ---------------------------------------------------------------- JSound.cpp

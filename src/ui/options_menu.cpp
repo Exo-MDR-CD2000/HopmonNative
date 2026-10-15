@@ -101,7 +101,8 @@ void OptionsMenu::Save() {
 }
 
 // Every setting back to its default, applied at once and saved. Kept: the path to Hopmon.exe
-// (needed to find the game data), the ini location, and saved progress (stored separately).
+// (needed to find the game data), the save folder, the ini location, and saved progress
+// (stored separately).
 void OptionsMenu::ResetAllSettings() {
     Config& c = GetConfig();
     const Config old = c;
@@ -109,6 +110,7 @@ void OptionsMenu::ResetAllSettings() {
     fresh.path = old.path;
     fresh.version = old.version;
     fresh.gamePath = old.gamePath;
+    fresh.savePath = old.savePath;  // resetting must not move where progress is saved
     c = fresh;
     pendingActive_ = false;
     // apply everything that is not read live every frame
@@ -360,7 +362,7 @@ OptionsMenu::Page OptionsMenu::MainPage() {
     p.items.push_back({"Cheats", "Game modifiers: unlock all levels, infinite fire, no crystal slowdown.", nullptr,
                        nullptr, [this] { PushPage(CheatsPage()); }, nullptr});
     p.items.push_back({"Reset all settings",
-                       "Restore every setting to its default. Saved progress and the game path are kept.", nullptr,
+                       "Restore every setting to its default. Saved progress, the game path and the save folder are kept.", nullptr,
                        nullptr,
                        [this] {
                            AskConfirm("Reset all settings?", "Video, graphics, audio, controls and cheats go back to defaults.",
