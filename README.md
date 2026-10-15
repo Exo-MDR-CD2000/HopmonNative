@@ -54,7 +54,9 @@ The original game logic runs unchanged, at its 100 steps per second. Everything 
   shadows and smooth texture filtering.
 - Adjustable HUD size and an in-level field of view.
 
-**Pause / options menu (F10 or gamepad Start)**
+**Pause / options menu (OPTIONS on the title screen; F10 or gamepad Start during a level)**
+- The title screen's OPTIONS entry uses the original game's own artwork, which Saito Games drew but
+  never used.
 - Every setting can be changed in-game and is saved automatically: video, graphics, audio, controls
   and cheats.
 - Resume, return to the main menu, quit, or reset all settings.
@@ -87,7 +89,7 @@ The original game logic runs unchanged, at its 100 steps per second. Everything 
 | Menu confirm | Enter, Z, X, Shift or Ctrl | A / B |
 | Back / give up level | Esc | — |
 | Pause (original) | P | — |
-| Pause / options menu | F10 | Start |
+| Pause / options menu (in a level) | F10 | Start |
 | Toggle fullscreen | Alt+Enter or F11 | — |
 | Screenshot | F12 | — |
 

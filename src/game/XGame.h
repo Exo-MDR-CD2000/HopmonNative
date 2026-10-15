@@ -165,7 +165,7 @@ public:
     XTitleBackground* background;
     JSprite* cursorLeft;
     JSprite* cursorRight;
-    JSprite* menuItems[2];
+    JSprite* menuItems[3];  // START, OPTIONS (native: the original's unused bitmap 0xca), EXIT
     JSprite* textHopmon;
     JSprite* textCopyright;
     JSprite* textUnreg;

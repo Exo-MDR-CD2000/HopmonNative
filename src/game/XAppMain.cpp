@@ -231,9 +231,12 @@ bool XApplication::CanReturnToMainMenu() const {
 // follows the game's own input rule: the player controls Hopmon only while he is waiting, moving
 // or riding an arrow, so the level-complete flight, the death animation and the shutter between
 // levels are all excluded, and the menu is back as soon as the next level accepts input.
+// On the title screen and level select, F10 / Start do nothing: the title screen has its own
+// OPTIONS entry (which opens the menu directly, without asking here).
 bool XApplication::CanOpenOptions() const {
-    if (state == START_LOGO || state == START_ENDING) return false;
+    if (state == START_LOGO || state == START_ENDING || state == START_TITLE || state == START_SELLEVEL) return false;
     if (dynamic_cast<XLogoObject*>(processObj) || dynamic_cast<XEndingObject*>(processObj)) return false;
+    if (dynamic_cast<XTitleObject*>(processObj) || dynamic_cast<XSelectLevelObject*>(processObj)) return false;
     if (auto* g = dynamic_cast<XGameObject*>(processObj)) {
         if (state != IN_PROCESS || !g->pac) return false;
         XPac::STATE ps = g->pac->GetState();

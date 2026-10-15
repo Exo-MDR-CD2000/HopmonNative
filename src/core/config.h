@@ -25,6 +25,7 @@ struct Config {
     bool smoothSprites = false;    // bilinear scaling of 2D sprites
     bool perPixelLighting = false; // evaluate the original lighting per pixel instead of per vertex
     bool enhancedShadows = false;  // softer blob shadows
+    int brightness = 100;          // 50..150 %, applied as a gamma curve to the final picture
     float renderScale = 1.0f;      // supersampling factor for the 3D scene
     AspectMode aspect = AspectMode::Original4x3;
     float fovScale = 1.0f;         // multiplies the original vertical FOV (widescreen keeps vertical FOV)
@@ -55,7 +56,7 @@ struct Config {
 
     std::string path;
     int version = 0;                    // config_version found in the file (0 = older file)
-    static constexpr int kCurrentVersion = 10;
+    static constexpr int kCurrentVersion = 11;
     bool Load(const std::string& file);
     bool Save() const;
 };

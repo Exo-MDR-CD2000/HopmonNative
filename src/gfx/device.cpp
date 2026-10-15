@@ -102,8 +102,9 @@ static const char* kPresentFS = R"GLSL(
 #version 330 core
 in vec2 vUV;
 uniform sampler2D uTex;
+uniform float uGamma;  // 1.0 = unchanged; brightness setting as a gamma curve
 out vec4 fragColor;
-void main() { fragColor = vec4(texture(uTex, vUV).rgb, 1.0); }
+void main() { fragColor = vec4(pow(texture(uTex, vUV).rgb, vec3(uGamma)), 1.0); }
 )GLSL";
 
 // ---------------------------------------------------------------------------
@@ -268,6 +269,7 @@ bool Device::Init(SDL_Window* window) {
     u_.screen2D = loc("uScreen2D"); u_.viewport2D = loc("uViewport2D");
 #undef U
     presentTexLoc_ = glGetUniformLocation(progPresent_, "uTex");
+    presentGammaLoc_ = glGetUniformLocation(progPresent_, "uGamma");
 
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);
@@ -436,6 +438,8 @@ void Device::Present() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, resolveTex_);
     glUniform1i(presentTexLoc_, 0);
+    // brightness 150% -> exponent 0.67 (lighter mid-tones), 50% -> 2.0 (darker); black and white stay put
+    glUniform1f(presentGammaLoc_, 100.f / (float)std::clamp(GetConfig().brightness, 50, 150));
     struct V { float x, y, z, u, v; } q[4] = {{-1, -1, 0, 0, 0}, {1, -1, 0, 1, 0}, {-1, 1, 0, 0, 1}, {1, 1, 0, 1, 1}};
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);

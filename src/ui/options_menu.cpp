@@ -341,9 +341,14 @@ std::string OptionsMenu::LostLine() const {
 
 OptionsMenu::Page OptionsMenu::MainPage() {
     Page p;
-    p.title = "PAUSED";
-    p.items.push_back({"Resume game", "Close this menu and continue (F10 / Start).", nullptr, nullptr,
-                       [this] { Close(); }, nullptr});
+    // On the title screen (where "Main menu" has nowhere to go) this is an options menu, not a pause.
+    const bool onTitle = !app_->CanReturnToMainMenu();
+    p.title = onTitle ? "OPTIONS" : "PAUSED";
+    if (onTitle)
+        p.items.push_back({"Back", "Close this menu (F10 / Start).", nullptr, nullptr, [this] { Close(); }, nullptr});
+    else
+        p.items.push_back({"Resume game", "Close this menu and continue (F10 / Start).", nullptr, nullptr,
+                           [this] { Close(); }, nullptr});
     p.items.push_back({"Video", "Window, resolution, frame rate, widescreen and HUD.", nullptr, nullptr,
                        [this] { PushPage(VideoPage()); }, nullptr});
     p.items.push_back({"Graphics", "Antialiasing, sharpness and visual upgrades.", nullptr, nullptr,
@@ -362,14 +367,15 @@ OptionsMenu::Page OptionsMenu::MainPage() {
                                       [this] { ResetAllSettings(); });
                        },
                        nullptr});
-    p.items.push_back({"Main menu", "Leave the current screen and return to the title screen.", nullptr, nullptr,
-                       [this] {
-                           AskConfirm("Return to the main menu?", LostLine(), [this] {
-                               Close();
-                               app_->ReturnToMainMenu();
-                           });
-                       },
-                       [this] { return app_->CanReturnToMainMenu(); }});
+    if (!onTitle)
+        p.items.push_back({"Main menu", "Leave the current screen and return to the title screen.", nullptr, nullptr,
+                           [this] {
+                               AskConfirm("Return to the main menu?", LostLine(), [this] {
+                                   Close();
+                                   app_->ReturnToMainMenu();
+                               });
+                           },
+                           [this] { return app_->CanReturnToMainMenu(); }});
     p.items.push_back({"Quit game", "Close Hopmon. Settings are already saved.", nullptr, nullptr,
                        [this] {
                            AskConfirm("Quit the game?", LostLine(), [this] {
@@ -656,6 +662,17 @@ OptionsMenu::Page OptionsMenu::GraphicsPage() {
                      Save();
                  },
                  nullptr, nullptr});
+    {
+        Item it{"Brightness", "Adjusts how bright the picture looks. 100% = original.",
+                [] { return Pct(GetConfig().brightness); },
+                [this](int d) {
+                    GetConfig().brightness = std::clamp(GetConfig().brightness + d * 5, 50, 150);
+                    Save();
+                },
+                [] {}, nullptr};
+        it.bar = [] { return GetConfig().brightness - 50; };  // 50..150 % shown as an empty..full bar
+        v.push_back(it);
+    }
     v.push_back({"Back", "", nullptr, nullptr, [this] { Back(false); }, nullptr});
     return p;
 }
@@ -779,7 +796,7 @@ OptionsMenu::Page OptionsMenu::CheatsPage() {
             it.focusWhenDisabled = true;
             std::string help = ch.help;
             it.helpFn = [this, help] {
-                return app_->InLevel() ? std::string("Change this on the title or level-select screen.") : help;
+                return app_->InLevel() ? std::string("Change this from OPTIONS on the title screen.") : help;
             };
         }
         p.items.push_back(it);

@@ -5,8 +5,8 @@ time it runs. Every setting is also explained in comments inside the file itself
 
 ## How the file works
 
-- **Most people won't need to edit this file.** Press **F10** (or **Start** on a gamepad) in the game
-  to open the options menu. Everything in this file except `[game] path` can be changed there,
+- **Most people won't need to edit this file.** Choose **OPTIONS** on the title screen, or press **F10**
+  (or **Start** on a gamepad) during a level, to open the options menu. Everything in this file except `[game] path` can be changed there,
   takes effect immediately, and is saved here automatically.
 - If you edit the file by hand, save it and restart the game. The file is read only at startup.
   Don't edit it while the game is running: the next change in the options menu would overwrite your
@@ -95,6 +95,7 @@ often the game itself updates.
 | `smooth_sprites` | on/off | `0` | Smooth scaling of 2D images: the logo, menus and on-screen display. Off keeps them crisp. |
 | `per_pixel_lighting` | on/off | `0` | Uses the original lights but calculates them for every pixel instead of every corner, for smoother shading on round objects. |
 | `enhanced_shadows` | on/off | `0` | Soft-edged shadows under characters and objects, instead of the original hard-edged ones. |
+| `brightness` | `50` to `150` | `100` | Picture brightness in percent. `100` = original. Works like a gamma setting: higher lifts dark and middle tones while black and white stay the same, so dark areas are easier to see without washing out the picture; lower darkens them. Also under **Options → Graphics → Brightness**. |
 | `show_fps` | on/off | `0` | Shows the game's own frames-per-second counter in the top-right corner. |
 
 ### Example: a typical widescreen setup

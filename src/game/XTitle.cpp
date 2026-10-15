@@ -400,7 +400,7 @@ void XSelectLevelObject::CreatePreviewMap() {
 XTitleObject::XTitleObject(XApplication* a)
     : XProcessObject(a), camera(nullptr), pac(nullptr), background(nullptr), cursorLeft(nullptr),
       cursorRight(nullptr), textHopmon(nullptr), textCopyright(nullptr), textUnreg(nullptr), cursorPos(-1) {
-    menuItems[0] = menuItems[1] = nullptr;
+    menuItems[0] = menuItems[1] = menuItems[2] = nullptr;
     app->GetMidiList()->Play(0);
     JSurfaceList* sl = app->GetSurfaceList();
     sl->CreateSurface(0xd0, 1);
@@ -409,6 +409,7 @@ XTitleObject::XTitleObject(XApplication* a)
     sl->CreateSurface(0xf8, 1);
     sl->CreateSurface(0xf7, 1);
     sl->CreateSurface(0xcd, 1);
+    sl->CreateSurface(0xca, 1);  // native: OPTIONS, drawn for the original but never used by it
     sl->CreateSurface(0xc9, 1);
     camera = new XCamera(app);
     camera->ResetForTitle();
@@ -422,7 +423,8 @@ XTitleObject::XTitleObject(XApplication* a)
     textCopyright = new JSprite(sl, 0xf8, 1);
     textUnreg = new JSprite(sl, 0xf7, 1);
     menuItems[0] = new JSprite(sl, 0xcd, 2);
-    menuItems[1] = new JSprite(sl, 0xc9, 2);
+    menuItems[1] = new JSprite(sl, 0xca, 2);
+    menuItems[2] = new JSprite(sl, 0xc9, 2);
     StartFadeIn(0);
 }
 
@@ -440,7 +442,7 @@ XTitleObject::~XTitleObject() {
         m = nullptr;
     }
     JSurfaceList* sl = app->GetSurfaceList();
-    for (WORD id : {0xd0, 0xd1, 0xdb, 0xf8, 0xf7, 0xcd, 0xc9}) sl->DestroySurface(id);
+    for (WORD id : {0xd0, 0xd1, 0xdb, 0xf8, 0xf7, 0xcd, 0xca, 0xc9}) sl->DestroySurface(id);
 }
 
 void XTitleObject::ProcessFrame(DWORD frameCount) {
@@ -478,23 +480,29 @@ void XTitleObject::ProcessFrame(DWORD frameCount) {
     bool up = in->GetKeyboardPressed(DIK_UP) || in->GetJoyDirPressed(0, 0);
     bool down = in->GetKeyboardPressed(DIK_DOWN) || in->GetJoyDirPressed(0, 2);
     int keyButton = CheckButtonPressed(in);
+    // Native: a third entry, OPTIONS, between START and EXIT (EXIT moves from 1 to 2).
+    const int last = 2;
     if (in->GetKeyboardPressed(DIK_ESCAPE)) {
-        cursorPos = 1;
+        cursorPos = last;
         keyButton = 1;
     }
     JSoundList* snd = app->GetSoundList();
     if (up) {
         snd->Play(0xec, 100, 0);
         cursorPos = cursorPos - 1;
-        if (cursorPos < 0) cursorPos = 1;
+        if (cursorPos < 0) cursorPos = last;
     } else if (down) {
         snd->Play(0xec, 100, 0);
         cursorPos = cursorPos + 1;
-        if (cursorPos > 1) cursorPos = 0;
+        if (cursorPos > last) cursorPos = 0;
     } else if (keyButton) {
-        snd->Play(0xed, 100, 0);
-        if (cursorPos == 0) StartFadeOut(0);
-        else StartFadeOut(1);
+        if (cursorPos == 1) {
+            app->OpenOptions();  // plays the same confirm sound itself
+        } else {
+            snd->Play(0xed, 100, 0);
+            if (cursorPos == 0) StartFadeOut(0);
+            else StartFadeOut(1);
+        }
     }
 }
 
@@ -510,8 +518,10 @@ void XTitleObject::Render() {
     textHopmon->Draw(bb);
     textCopyright->SetCenterPos(cx, cy - 0x5a);
     textCopyright->Draw(bb);
-    int menuY = cy + 0x96;
-    for (int i = 0; i < 2; i++) {
+    // Native: the original centred its two entries from cy + 0x96; with three, the block starts
+    // 20 px higher so EXIT stays on screen.
+    int menuY = cy + 0x96 - 20;
+    for (int i = 0; i < 3; i++) {
         menuItems[i]->SetCenterPos(cx, menuY);
         menuItems[i]->SetCurrentFrame(cursorPos == i);
         menuItems[i]->Draw(bb);

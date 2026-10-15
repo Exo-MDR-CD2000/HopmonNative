@@ -3,6 +3,25 @@
 All notable changes to Hopmon Native. Versions follow [semantic versioning](https://semver.org/):
 MAJOR for incompatible changes, MINOR for new features, PATCH for fixes.
 
+## [1.1.0] - 2026-10-15
+
+### Added
+- OPTIONS entry on the title screen, between START and EXIT, that opens the options menu. It uses
+  the game's own OPTIONS artwork, which is in the original Hopmon.exe but was never shown. The
+  title menu moves up slightly to fit the third entry. Opened from the title screen, the menu is
+  titled OPTIONS, its first entry is Back, and Main menu is hidden.
+- Brightness setting (Options → Graphics → Brightness, or `brightness` in the config file),
+  50–150%. It works like a gamma control: dark and middle tones get lighter or darker while black
+  and white stay the same.
+
+### Changed
+- F10 and gamepad Start no longer open the menu on the title screen and level select; use OPTIONS
+  on the title screen there. They still open the pause menu during a level.
+
+### Fixed
+- Pause menu text no longer shows thin light lines along the edges of letters when antialiasing
+  is on.
+
 ## [1.0.0] - 2026-10-14
 
 First public release.

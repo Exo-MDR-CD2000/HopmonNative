@@ -42,6 +42,7 @@ public:
     void ApplyDisplaySettings();
     void ApplyVSync();
     bool OptionsOpen() const;
+    void OpenOptions();  // e.g. from the title screen's OPTIONS entry
     // Hooks for the options/pause menu, implemented by the game.
     enum class UISound { Move, Confirm };
     virtual void PlayUISound(UISound s) { (void)s; }

@@ -143,7 +143,7 @@ private:
             lightDiffuse, flat, texOn, colorOp, colorArg1, colorArg2, alphaOp, alphaArg1, alphaArg2, alphaTest,
             hasVertexColor, perPixel, tex, constColor, screen2D, viewport2D;
     } u_{};
-    GLint presentTexLoc_ = -1;
+    GLint presentTexLoc_ = -1, presentGammaLoc_ = -1;
 
     DWORD rs_[D3DRENDERSTATE_MAX];
     DWORD tss_[D3DTSS_MAX];

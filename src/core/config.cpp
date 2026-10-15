@@ -66,6 +66,7 @@ bool Config::Load(const std::string& file) {
             else if (k == "smooth_sprites") smoothSprites = toBool(v);
             else if (k == "per_pixel_lighting") perPixelLighting = toBool(v);
             else if (k == "enhanced_shadows") enhancedShadows = toBool(v);
+            else if (k == "brightness") brightness = std::clamp(iv, 50, 150);
             else if (k == "render_scale") renderScale = std::clamp((float)atof(v.c_str()), 0.25f, 4.0f);
             else if (k == "aspect") aspect = (AspectMode)std::clamp(iv, 0, 2);
             else if (k == "fov_scale") fovScale = std::clamp((float)atof(v.c_str()), 0.5f, 2.0f);
@@ -214,6 +215,10 @@ bool Config::Save() const {
     P("; enhanced_shadows: 1 = soft-edged shadows under characters and objects.\n"
       ";   0 = original shadows (default).\n");
     fprintf(f, "enhanced_shadows = %d\n\n", enhancedShadows ? 1 : 0);
+    P("; brightness: picture brightness in percent, 50 to 150. 100 = original\n"
+      ";   (default). Higher lifts dark and middle tones (whites stay white), lower\n"
+      ";   darkens them.\n");
+    fprintf(f, "brightness = %d\n\n", brightness);
     P("; show_fps: 1 = show the original frames-per-second counter. 0 = hide\n"
       ";   (default).\n");
     fprintf(f, "show_fps = %d\n\n", showFps ? 1 : 0);

@@ -36,6 +36,10 @@ int CD3DApplication::DisplayFPS() const { return GetConfig().showFps ? 1 : 0; }
 
 bool CD3DApplication::OptionsOpen() const { return menu_ && menu_->IsOpen(); }
 
+void CD3DApplication::OpenOptions() {
+    if (menu_) menu_->Open();
+}
+
 void CD3DApplication::ApplyVSync() { SDL_GL_SetSwapInterval(GetConfig().vsync ? 1 : 0); }
 
 // Monitor selected in the config (0 = primary).
