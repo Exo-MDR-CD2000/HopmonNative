@@ -1,0 +1,24 @@
+# build output
+build/
+build-*/
+out/
+.vs/
+*.user
+
+# files the program creates at runtime
+*.log
+hopmon_native.ini
+hopmon_*.bmp
+
+# the original game and its assets: these must never be committed
+Hopmon.exe
+Hopmon.pdb
+*.exe
+*.pdb
+*.mid
+*.sf2
+*.mp3
+*.flac
+Manual_E.htm
+music/
+decompiled/
