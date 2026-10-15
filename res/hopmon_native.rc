@@ -1,0 +1,30 @@
+// Icon and version information for HopmonNative.exe. The icon is original artwork made for
+// this project (source: docs/branding/icon.svg). The game's own data is read at runtime from
+// the original Hopmon.exe and is not included here.
+#include <winver.h>
+#include "version.h"  // generated from the version in CMakeLists.txt
+
+// The first icon resource becomes the program icon (Explorer, title bar and taskbar).
+1 ICON "hopmon_native.ico"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION HOPMON_VERSION_MAJOR,HOPMON_VERSION_MINOR,HOPMON_VERSION_PATCH,0
+ PRODUCTVERSION HOPMON_VERSION_MAJOR,HOPMON_VERSION_MINOR,HOPMON_VERSION_PATCH,0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "FileDescription", "Hopmon Native (requires original Hopmon.exe)"
+      VALUE "FileVersion", HOPMON_VERSION_STRING
+      VALUE "ProductName", "Hopmon Native"
+      VALUE "ProductVersion", HOPMON_VERSION_STRING
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
