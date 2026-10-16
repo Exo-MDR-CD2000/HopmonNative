@@ -41,6 +41,7 @@ nothing is written to the Windows registry. To keep saves elsewhere, set `save_p
 in the ini (for example `save_path = save` for a `save` folder next to the game). The first time
 you start Hopmon Native, it copies the progress you have from the original game; the original
 Hopmon.exe keeps its own progress untouched. Back up the `saves` folder to keep your progress.
+Each level pack from a mod keeps its own progress next to the original game's.
 
 If the game is somewhere else, start with `--game "C:\path\to\Hopmon.exe"` or set `path =` under
 `[game]` in the ini.
@@ -74,6 +75,17 @@ The original game logic runs unchanged, at its 100 steps per second. Everything 
   folder next to `Hopmon.exe`, and it plays instead of the matching MIDI track. It loops seamlessly,
   and `LOOPSTART`/`LOOPLENGTH` tags are honoured.
 
+**Mods** (see [MODDING.md](MODDING.md))
+- **Add-ons** replace textures (including high-resolution and transparent PNGs), 3D models (glTF
+  `.glb`/`.gltf` or `.x`), sound effects, music and levels, in whatever you play.
+- **Level packs** are new campaigns of your own levels, in worlds with their own look, floor and
+  music, with their own textures, models and sounds if they like. Each pack keeps its own
+  progress, and level select scrolls for packs longer than 45 levels.
+- Mods are folders or `.zip` files in `mods/levelpacks` and `mods/addons` next to the game. Choose
+  the level pack to play, and switch add-ons on and off, under OPTIONS → Mods on the title screen.
+- `--export-assets` writes every original asset from your copy of the game, with the names mods
+  use, as a starting point for your own work. Two example mods are in `examples/mods`.
+
 **Controls**
 - Full gamepad support through SDL3, with an adjustable stick dead zone.
 
@@ -92,6 +104,8 @@ The original game logic runs unchanged, at its 100 steps per second. Everything 
 | Fire | Z or Shift | A / Cross |
 | Camera (hold, then ←/→ rotate, ↑/↓ tilt) | X or Ctrl | B / Circle |
 | Menu confirm | Enter, Z, X, Shift or Ctrl | A / B |
+| Level select: next/previous level (hold to scroll faster) | ← / → | D-pad / left stick |
+| Level select: jump 10 levels (hold to repeat) | ↑ / ↓ | D-pad / left stick |
 | Back / give up level | Esc | — |
 | Pause (original) | P | — |
 | Pause / options menu (in a level) | F10 | Start |
@@ -148,14 +162,17 @@ On Linux and macOS, music needs a SoundFont: put `soundfont.sf2` next to the pro
 - **Assets.** These are read straight from the PE resources of `Hopmon.exe`, using `src/core`.
 
 ```
-src/core       PE resource reader, SHA-256, asset loading, config, saved progress, logging
+src/core       PE resource reader, SHA-256, asset loading, config, saved progress, mods, asset export,
+               logging
 src/gfx        OpenGL loader and the Direct3D 7 / DirectDraw emulation layer
 src/audio      sound-effect mixer, MIDI sequencer, MP3/FLAC music streaming
 src/input      SDL3 keyboard/gamepad -> DirectInput-style state
 src/ui         pause/options menu overlay
 src/framework  ported DirectX 7 SDK framework (d3dapp, d3dfile, d3dtextr, d3dutil)
 src/game       the ported game logic
-third_party    TinySoundFont, dr_mp3, dr_flac, font8x8 (see THIRD_PARTY_NOTICES.md)
+third_party    TinySoundFont, dr_mp3, dr_flac, stb_image, stb_vorbis, cgltf, miniz, font8x8
+               (see THIRD_PARTY_NOTICES.md)
+examples/mods  two example mods (CC0): a level pack and an add-on
 res            program icon and version info for Windows
 docs           README banner and the branding sources
 ```
@@ -173,16 +190,22 @@ docs           README banner and the branding sources
 
 ```
 HopmonNative [--game PATH] [--windowed | --fullscreen] [--size W H] [--set section.key=value]
-             [--allow-unverified]
+             [--allow-unverified] [--export-assets [FOLDER]]
 ```
 
 `--set` overrides any ini setting for one launch, for example `--set video.aspect=2`.
+
+`--export-assets` writes the original images, models, sounds and levels to `FOLDER` (default:
+`export` next to the program) for making mods, then exits. The exported files come from your copy
+of the game and must not be shared.
 
 ## Legal
 
 Hopmon, its name, artwork, levels, sounds and music are © 2001–2009 Saito Games. This project isn't
 affiliated with or endorsed by Saito Games. It distributes none of the game's assets. You must
 supply your own copy of the freeware game, available from [saitogames.com](http://www.saitogames.com/).
+Mods for Hopmon Native may only contain their creators' own work, never files taken from the game
+(see [MODDING.md](MODDING.md#what-you-may-share)).
 
 The code in `src/game` (and the ported DirectX SDK framework in `src/framework`) is a reconstruction
 of the original program's logic, made so that the game can run on modern systems. It isn't covered

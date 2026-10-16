@@ -3,6 +3,64 @@
 All notable changes to Hopmon Native. Versions follow [semantic versioning](https://semver.org/):
 MAJOR for incompatible changes, MINOR for new features, PATCH for fixes.
 
+## [1.3.0] - 2026-10-16
+
+The first version with mods. See [MODDING.md](MODDING.md).
+
+### Added
+- **Mods**, in two kinds, each with its own folder next to the game:
+  - **Level packs** (`mods/levelpacks/`): new campaigns. You play one at a time, or the original
+    game.
+  - **Add-ons** (`mods/addons/`): replacements that apply to whatever you play. Several can be on
+    at once.
+
+  A mod is a folder or `.zip` file described by a `mod.ini`. Mods only ever add their creators'
+  own files; everything they don't replace still comes from your Hopmon.exe.
+- **Replacing assets.** Add-ons and level packs can replace the game's images, 3D models, sound
+  effects, music and levels by name (`textures/floor_castle.png`, `models/crystal.glb`, `sounds/hop.wav`,
+  `levels/castle-07.txt`...).
+  - Images can be PNG, BMP, TGA or JPEG, at any resolution: larger images give sharper detail at
+    the same size on screen. PNGs with transparency use their own alpha, soft edges included.
+  - Models can be glTF 2.0 (`.glb`/`.gltf`, with colours, textures and transparency) or text `.x`.
+    `fit` in `mod.ini` scales a model to the original's size.
+  - Sounds can be WAV, Ogg Vorbis or FLAC, at any sample rate.
+  - Music can be FLAC, MP3 or MIDI.
+- **Level packs.** A mod can hold a whole new campaign: levels in text files, grouped into worlds
+  that each choose a look (castle, forest or toy), a floor texture and music. Packs can have any
+  number of levels. Levels are checked when the pack loads, and any problem is reported in the log.
+  A pack's own textures, models, sounds and music apply only while it's played.
+- **Options → Mods** (on the title screen):
+  - **Level pack** lists the original game and every installed pack, with its number of levels.
+    Choosing one asks for confirmation, then reloads at the title screen.
+  - **Add-ons** lists the add-ons in load order with tick boxes. Space (gamepad X) ticks one on
+    or off, Shift+Up/Down (gamepad LB/RB) moves it up or down the list, and Enter shows its
+    details. The add-on higher in the list wins when two replace the same thing. These changes
+    apply when the menu closes.
+
+  The choices are saved in a new `[mods]` section of `hopmon_native.ini`.
+- Each level pack keeps its own progress, in `saves/packs/<mod id>/progress.ini`.
+- `--export-assets [folder]` writes every original image (PNG), model (`.x` and `.glb`), sound
+  (WAV) and level (text) from your copy of the game under the names mods use, as a starting point
+  for your own work.
+- Two example mods (CC0) in `examples/mods`: a three-level pack with its own cave floor and
+  crystal model, and an add-on with purple fire, HD level-select lights and a new pickup sound.
+- [MODDING.md](MODDING.md): the guide to making mods, with every asset name and the level format.
+- `hopmon_native.log` lists the mods found and each replacement they make.
+- Faster level choosing for long level packs. On level select, holding Left/Right keeps scrolling,
+  at about 8 levels a second and then about 30 a second after 2 seconds, and Up/Down jump 10
+  levels (also repeating while held). A single press still moves one level and wraps round at the
+  ends as before; held scrolling stops at the first and last level.
+- Packs longer than 45 levels show a scrollbar under the row of level lights on level select. The
+  bright part shows which part of the pack the row is showing, and small marks show where each
+  world starts. The original game, with 45 levels, looks as before.
+- Options menu pages with more entries than fit on screen (such as a long list of add-ons or
+  level packs) show a scrollbar along the right edge, in place of the small arrows.
+
+### Fixed
+- Files in folders with non-English characters in their names (such as a Windows user name with
+  accents) are now read correctly.
+- CONFIG.md: the `save_path` row of the `[game]` table now displays as part of the table.
+
 ## [1.2.0] - 2026-10-15
 
 ### Added

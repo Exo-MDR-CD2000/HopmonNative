@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 # The project version is the single source of the program's version number: it is written into
 # the exe's version info (res/hopmon_native.rc), the log, and the release zip's name.
-project(HopmonNative VERSION 1.2.0 LANGUAGES C CXX)
+project(HopmonNative VERSION 1.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -33,6 +33,8 @@ endif()
 
 file(GLOB_RECURSE HOPMON_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/src/*.cpp)
+# miniz (zip reading for zipped mods) is C
+list(APPEND HOPMON_SOURCES ${CMAKE_SOURCE_DIR}/third_party/miniz.c)
 
 if(WIN32)
   add_executable(HopmonNative WIN32 ${HOPMON_SOURCES} res/hopmon_native.rc)
@@ -74,7 +76,11 @@ endif()
 # Release zip: `cmake --build build --config Release --target package` (or make_release.bat)
 # creates HopmonNative-<version>-windows-x64.zip with the program and its documents.
 install(TARGETS HopmonNative RUNTIME DESTINATION .)
-install(FILES README.md CONFIG.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md DESTINATION .)
+install(FILES README.md CONFIG.md MODDING.md CHANGELOG.md LICENSE THIRD_PARTY_NOTICES.md DESTINATION .)
+# the example mods ship as examples (copy them into mods/ to try them), and empty mods/levelpacks/ and mods/addons/ folders
+install(DIRECTORY examples/mods/ DESTINATION examples/mods)
+install(DIRECTORY DESTINATION mods/levelpacks)
+install(DIRECTORY DESTINATION mods/addons)
 set(CPACK_GENERATOR ZIP)
 set(CPACK_PACKAGE_NAME HopmonNative)
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})

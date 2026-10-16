@@ -37,7 +37,6 @@ speed of 100 logic steps per second.
 | Setting | Values | Default | What it does |
 |---|---|---|---|
 | `path` | a file path, or empty | empty | Where your original `Hopmon.exe` is. When empty, the game looks next to `HopmonNative.exe` and in the current folder. Example: `path = D:\Games\Hopmon\Hopmon.exe` |
-
 | `save_path` | a folder, or empty | empty | Where saved progress is kept. When empty: `%APPDATA%\HopmonNative\saves` on Windows, `~/.local/share/HopmonNative/saves` on Linux. A relative path is relative to `HopmonNative.exe`'s folder, so `save_path = save` keeps saves in a `save` folder next to the game. `%NAME%` environment variables work: `save_path = %USERPROFILE%\Documents\Hopmon saves`. |
 
 The music files (`Music01.mid` to `Music04.mid`) are always loaded from the same folder as `Hopmon.exe`.
@@ -46,7 +45,8 @@ The music files (`Music01.mid` to `Music04.mid`) are always loaded from the same
 
 - **One file per campaign:** the original 45 levels are in `saves\original\progress.ini`, a short
   text file holding the highest level you've unlocked. The previous version is kept as
-  `progress.bak`.
+  `progress.bak`. Each level pack from a mod has its own file, in
+  `saves\packs\<mod id>\progress.ini`.
 - **Changing `save_path`:** on the next start, your saves are copied to the new folder if it has none
   yet. The old copies are left where they were. If the new folder already has saves, those are
   used and nothing is copied.
@@ -282,14 +282,29 @@ changed there on the title and level-select screens; in a level it's greyed out.
 
 | Setting | Values | Default | What it does |
 |---|---|---|---|
-| `unlock_all_levels` | on/off | `0` | Every level (1–45) can be chosen on the level-select screen. |
+| `unlock_all_levels` | on/off | `0` | Every level (1–45, or all of a level pack's levels) can be chosen on the level-select screen. |
 | `infinite_fire_energy` | on/off | `0` | The fire gauge is always full, so Hopmon fires on every press instead of waiting about 3 seconds for it to recharge. The game's own limit of 3 shots on screen at once still applies. |
 | `no_crystal_slowdown` | on/off | `0` | Carrying crystals no longer slows Hopmon down. Normally each crystal he carries makes every hop 0.03 seconds slower; with this on, every hop takes the normal 0.4 seconds. |
 
-`unlock_all_levels` never changes your real progress, which is the highest level you've reached and
-is shared with the original `Hopmon.exe`.
+`unlock_all_levels` never changes your real progress, which is the highest level you've reached.
 
 - **Turning it off** brings back exactly the levels you had unlocked before.
 - **Clearing a level with the cheat on** saves progress only if that level was already unlocked for
   real. Clearing level 40 when you've only reached level 3 lets you play on, but doesn't unlock
   levels 4–41.
+
+---
+
+## [mods]
+
+Which mods are used, in what order, and which level pack is played. The easiest way to change
+these is **OPTIONS → Mods** on the title screen; [MODDING.md](MODDING.md) explains mods in full.
+
+| Setting | Values | Default | What it does |
+|---|---|---|---|
+| `pack` | `original`, or a level pack's id | `original` | The level pack to play. `original` is the original 45 levels. Any other value is the id of a level pack in `mods/levelpacks`; if it's missing or can't be used, the original game is played. |
+| `<add-on id>` | on/off | `on` | One line per add-on in `mods/addons`, in load order, as in the menu. When two add-ons replace the same thing, the one higher up wins. |
+
+When settings are saved, the game writes one line for every installed add-on. Add-ons it hasn't
+seen before are added at the end, switched on. Lines for add-ons that are no longer installed are
+removed. Level packs have no line of their own: only the one chosen with `pack` is used.
