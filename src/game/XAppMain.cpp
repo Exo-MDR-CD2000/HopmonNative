@@ -1,9 +1,11 @@
 // Port of XAppMain.cpp / XRegister.cpp
 #include "XGame.h"
 #include "../core/saves.h"
+#include "../core/mods.h"
 #include "../core/config.h"
 #include "../core/log.h"
 #include "../framework/d3dtextr.h"
+#include "../framework/d3dfile.h"
 #include "../framework/d3dutil.h"
 #include "../gfx/device.h"
 #include <SDL3/SDL.h>
@@ -105,7 +107,9 @@ void XFPSDisplay::Render() {
 
 // ============================================================ XApplication
 XApplication::XApplication()
-    : currentLevel(0), maxSelLevel(0), maxFreeLevel(9), maxLevel(0x2c), tempList(new JStringList()), state(NON),
+    : currentLevel(0), maxSelLevel(0), maxFreeLevel(9),
+      maxLevel((int)Mods::ActivePack().levels.size() - 1),  // native: 0x2c for the original game
+      tempList(new JStringList()), state(NON),
       dinput(nullptr), midiList(nullptr), soundList(nullptr), surfaceList(nullptr), processObj(nullptr),
       fpsDisplay(nullptr) {
     DisableStickyKeys();
@@ -126,16 +130,21 @@ XApplication::~XApplication() {
 int XApplication::SelectableLevel() const { return GetConfig().unlockAllLevels ? maxLevel : maxSelLevel; }
 
 // Native: progress lives in <save dir>/original/progress.ini (see core/saves.h) instead of the
-// registry key HKCU\Software\SaitoGames\Hopmon that the original used. On the very first start
-// with no saved progress, the original's registry value is imported once (read only, so the
-// original Hopmon.exe keeps its own progress untouched).
+// registry key HKCU\Software\SaitoGames\Hopmon that the original used; each level pack keeps its
+// own in <save dir>/packs/<id>/progress.ini. On the very first start with no saved progress, the
+// original's registry value is imported once (read only, so the original Hopmon.exe keeps its
+// own progress untouched).
 void XApplication::LoadWinRegData() {
     LoadRegisterInfo("Software\\SaitoGames\\Hopmon");
+    const Mods::Pack& pack = Mods::ActivePack();
     maxSelLevel = 0;
     Saves::PackSave save;
-    if (Saves::Load("original", &save)) {
+    if (Saves::Load(pack.id, &save)) {
         maxSelLevel = save.GetInt("progress", "unlocked", 1) - 1;
-    } else {
+        if (save.packVersion != pack.version)
+            Log("Saves: progress for '%s' was saved with version %s of the pack (now %s)", pack.id.c_str(),
+                save.packVersion.c_str(), pack.version.c_str());
+    } else if (pack.id == "original") {
         int legacy = 0;
         if (Saves::TakeLegacyLevelOnce(&legacy) && legacy >= 0 && legacy <= maxLevel) {
             maxSelLevel = legacy;
@@ -143,20 +152,71 @@ void XApplication::LoadWinRegData() {
             SaveWinRegData();
         }
     }
-    if (maxSelLevel < 0 || maxSelLevel > maxLevel) maxSelLevel = 0;
+    if (maxSelLevel < 0) maxSelLevel = 0;
+    if (maxSelLevel > maxLevel) maxSelLevel = maxLevel;  // a pack may have become shorter
 }
 
 void XApplication::SaveWinRegData() {
     SaveRegisterInfo("Software\\SaitoGames\\Hopmon");
+    const Mods::Pack& pack = Mods::ActivePack();
     Saves::PackSave save;
-    if (!Saves::Load("original", &save)) {
-        save = Saves::PackSave();
-        save.pack = "original";
-    }
-    save.pack = "original";
-    save.packVersion = "1";
+    if (!Saves::Load(pack.id, &save)) save = Saves::PackSave();
+    save.pack = pack.id;
+    save.packVersion = pack.version;
     save.SetInt("progress", "unlocked", maxSelLevel + 1);
     Saves::Store(save);
+}
+
+// ---- Native: level packs
+int XApplication::GetCurrentWorld() const {
+    const Mods::Pack& p = Mods::ActivePack();
+    if (currentLevel >= 0 && currentLevel < (int)p.levelWorld.size()) return p.worlds[p.levelWorld[currentLevel]].look;
+    return 0;
+}
+
+WORD XApplication::CurrentFloorTexture() const {
+    const Mods::Pack& p = Mods::ActivePack();
+    if (currentLevel >= 0 && currentLevel < (int)p.levelWorld.size()) return p.worlds[p.levelWorld[currentLevel]].floorTexture;
+    return 0x9c;
+}
+
+void XApplication::PlayLevelMusic() {
+    const Mods::Pack& p = Mods::ActivePack();
+    int look = GetCurrentWorld();
+    int track = look + 1;  // the original: Music02 castle, Music03 forest, Music04 toy
+    if (currentLevel >= 0 && currentLevel < (int)p.levelWorld.size()) {
+        const Mods::World& w = p.worlds[p.levelWorld[currentLevel]];
+        if (!w.musicFile.empty()) track = midiList->TrackFor(w.musicFile);
+        else if (w.musicTrack >= 0) track = w.musicTrack;
+    }
+    midiList->Play(track);
+}
+
+// Floor textures that only exist in a level pack get their texture objects here (the originals'
+// are created in OneTimeSceneInit).
+void XApplication::CreatePackTextures() {
+    for (const Mods::World& w : Mods::ActivePack().worlds)
+        if (w.floorTexture >= 0x8000) D3DTextr_CreateTextureFromResource(w.floorTexture, 0, 0);
+}
+
+void XApplication::ApplyModChanges() {
+    SaveWinRegData();  // progress of the pack that was in play
+    if (midiList) midiList->Stop();
+    if (soundList) soundList->StopAll();
+    Mods::Init();
+    CD3DFile::ClearCache();
+    D3DTextr_ReloadAll();
+    CreatePackTextures();
+    D3DTextr_RestoreAllTextures();
+    surfaceList->RestoreAllSurfaces();
+    if (soundList) soundList->ReloadAll();
+    maxLevel = (int)Mods::ActivePack().levels.size() - 1;
+    currentLevel = 0;
+    LoadWinRegData();
+    GetConfig().Save();
+    Log("Mods: changes applied; level pack: %s (%d levels)", Mods::ActivePack().name.c_str(), maxLevel + 1);
+    // the title screen starts again with the new assets (and the pack's progress)
+    if (state == IN_PROCESS || state == NON) state = START_TITLE;
 }
 
 HRESULT XApplication::Create(const std::vector<std::string>& args) {
@@ -294,6 +354,7 @@ HRESULT XApplication::OneTimeSceneInit() {
     D3DTextr_CreateTextureFromResource(0xa3, 0, 0);
     D3DTextr_CreateTextureFromResource(0xc1, 0, 0);
     D3DTextr_CreateTextureFromResource(0x14c, 0, 0);
+    CreatePackTextures();  // native: a level pack's own floor textures
     return S_OK;
 }
 
@@ -378,6 +439,7 @@ HRESULT XApplication::FrameMove(DWORD frameCount) {
 HRESULT XApplication::FinalCleanup() {
     delete processObj;
     processObj = nullptr;
+    CD3DFile::ClearCache();  // native: mod models own GL textures; free them while the context exists
     delete fpsDisplay;
     fpsDisplay = nullptr;
     delete surfaceList;

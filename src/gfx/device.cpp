@@ -61,6 +61,10 @@ uniform int uColorOp, uColorArg1, uColorArg2, uAlphaOp, uAlphaArg1, uAlphaArg2;
 uniform vec4 uConstColor;
 uniform vec4 uMatDiffuse, uMatAmbient, uMatEmissive, uAmbient, uLightDiffuse;
 uniform vec3 uLightDir;
+// Native (mods): blend modes that ignore alpha - additive glows (ONE, ONE) and darkening
+// shadows (ZERO, SRCCOLOR) - get a mod image's own transparency applied to its colour instead:
+// 1 = fade to black (adds nothing), 2 = fade to white (darkens nothing). 0 = off (originals).
+uniform int uAlphaFix;
 out vec4 fragColor;
 vec4 pick(int a, vec4 diff, vec4 tex) { return a == 2 ? tex : diff; }
 vec4 op(int o, vec4 a1, vec4 a2) {
@@ -87,6 +91,10 @@ void main() {
         result.a = uAlphaOp == 1 ? diff.a : op(uAlphaOp, pick(uAlphaArg1, diff, t), pick(uAlphaArg2, diff, t)).a;
     }
     if (uAlphaTest && result.a < 0.5) discard;
+    if (uAlphaFix != 0 && uTexOn) {
+        float ta = texture(uTex, vUV).a;
+        result.rgb = uAlphaFix == 1 ? result.rgb * ta : mix(vec3(1.0), result.rgb, ta);
+    }
     fragColor = result * uConstColor;
 }
 )GLSL";
@@ -125,16 +133,18 @@ Texture* Texture::Create(const Image& img, bool colorKey, uint32_t keyRGB, bool 
 void Texture::Update(const Image& img, bool colorKey, uint32_t keyRGB) {
     width_ = img.width;
     height_ = img.height;
+    softAlpha_ = img.hasAlpha;
     std::vector<uint32_t> px(img.pixels.size());
     for (size_t i = 0; i < px.size(); i++) {
         uint32_t c = img.pixels[i];
         uint32_t rgb = c & 0xFFFFFF;
-        uint32_t a = (colorKey && rgb == keyRGB) ? 0 : 0xFF;
+        // a mod's PNG with transparency uses its own alpha; everything else the colour key
+        uint32_t a = img.hasAlpha ? (c >> 24) : ((colorKey && rgb == keyRGB) ? 0 : 0xFF);
         // store as RGBA bytes
         uint8_t r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
         px[i] = (uint32_t)r | (uint32_t)g << 8 | (uint32_t)b << 16 | a << 24;
     }
-    if (colorKey) {
+    if (colorKey || img.hasAlpha) {
         // Transparent pixels keep the key colour (e.g. black), which smooth filtering and mipmaps
         // would blend into the visible edge as a dark fringe. Give them the colour of their visible
         // neighbours instead (alpha stays 0, so point-sampled output is unchanged).
@@ -264,7 +274,7 @@ bool Device::Init(SDL_Window* window) {
     u_.lightDir = loc("uLightDir"); u_.lightDiffuse = loc("uLightDiffuse"); u_.flat = loc("uFlat");
     u_.texOn = loc("uTexOn"); u_.colorOp = loc("uColorOp"); u_.colorArg1 = loc("uColorArg1");
     u_.colorArg2 = loc("uColorArg2"); u_.alphaOp = loc("uAlphaOp"); u_.alphaArg1 = loc("uAlphaArg1");
-    u_.alphaArg2 = loc("uAlphaArg2"); u_.alphaTest = loc("uAlphaTest"); u_.hasVertexColor = loc("uHasVertexColor");
+    u_.alphaArg2 = loc("uAlphaArg2"); u_.alphaTest = loc("uAlphaTest"); u_.alphaFix = loc("uAlphaFix"); u_.hasVertexColor = loc("uHasVertexColor");
     u_.perPixel = loc("uPerPixel"); u_.tex = loc("uTex"); u_.constColor = loc("uConstColor");
     u_.screen2D = loc("uScreen2D"); u_.viewport2D = loc("uViewport2D");
 #undef U
@@ -459,7 +469,7 @@ bool Device::SaveScreenshot(const char* path) {
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
     glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-    FILE* f = fopen(path, "wb");
+    FILE* f = OpenFileUtf8(path, "wb");
     if (!f) return false;
     int stride = (W * 3 + 3) & ~3;
     uint32_t fileSize = 54 + stride * H;
@@ -577,6 +587,7 @@ void Device::ApplyState(DWORD fvf, bool twoD) {
     glUseProgram(prog_);
     glUniform1i(u_.screen2D, twoD);
     glUniform4f(u_.constColor, 1, 1, 1, 1);
+    glUniform1i(u_.alphaFix, 0);
     if (twoD) return;
 
     // depth
@@ -651,6 +662,12 @@ void Device::ApplyState(DWORD fvf, bool twoD) {
     glUniform1i(u_.alphaArg1, tss_[D3DTSS_ALPHAARG1]);
     glUniform1i(u_.alphaArg2, tss_[D3DTSS_ALPHAARG2]);
     glUniform1i(u_.alphaTest, 0);
+    if (texOn && texture_->SoftAlpha() && rs_[D3DRENDERSTATE_ALPHABLENDENABLE]) {
+        DWORD src = rs_[D3DRENDERSTATE_SRCBLEND], dst = rs_[D3DRENDERSTATE_DESTBLEND];
+        if (src == D3DBLEND_ONE) glUniform1i(u_.alphaFix, 1);
+        else if ((src == D3DBLEND_ZERO && dst == D3DBLEND_SRCCOLOR) || (src == D3DBLEND_DESTCOLOR && dst == D3DBLEND_ZERO))
+            glUniform1i(u_.alphaFix, 2);
+    }
     if (texOn) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texture_->Id());
@@ -744,6 +761,7 @@ void Device::Draw2DQuad(float x0, float y0, float x1, float y1, float u0, float 
     glUniform1i(u_.flat, 0);
     glUniform1i(u_.perPixel, 0);
     glUniform1i(u_.alphaTest, alphaTest);
+    glUniform1i(u_.alphaFix, 0);
     glUniform1i(u_.texOn, t != nullptr);
     glUniform1i(u_.colorOp, D3DTOP_SELECTARG1);
     glUniform1i(u_.colorArg1, D3DTA_TEXTURE);
@@ -787,7 +805,8 @@ HRESULT Device::BltToBackBuffer(const RECT* dst, Surface* src, const RECT* srcRe
     // except that those partially-off-screen sprites now appear.
     if (d.right <= d.left || d.bottom <= d.top) return E_FAIL;
     Texture* t = src->Tex();
-    float tw = (float)t->Width(), th = (float)t->Height();
+    // source rectangles are in the image's layout size (an HD replacement has more pixels)
+    float tw = (float)src->Width(), th = (float)src->Height();
     float x0 = (float)d.left, y0 = (float)d.top, x1 = (float)d.right, y1 = (float)d.bottom;
     if (hudScale_ != 1.f) {
         x0 = hudAnchorX_ + (x0 - hudAnchorX_) * hudScale_;
@@ -839,6 +858,7 @@ void Device::DrawUIQuad(float x0, float y0, float x1, float y1, float u0, float 
     glUniform1i(u_.flat, 0);
     glUniform1i(u_.perPixel, 0);
     glUniform1i(u_.alphaTest, 0);
+    glUniform1i(u_.alphaFix, 0);
     glUniform1i(u_.texOn, t != nullptr);
     glUniform1i(u_.colorOp, D3DTOP_MODULATE);
     glUniform1i(u_.colorArg1, D3DTA_TEXTURE);

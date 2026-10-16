@@ -36,12 +36,21 @@ private:
         int (*bar)() = nullptr;                // draws a 0..100 level bar next to the value
         std::function<std::string()> helpFn;   // dynamic help text (overrides `help` when set)
         bool focusWhenDisabled = false;        // cursor may rest on it while greyed out (to show why)
+        bool submenu = false;                  // shows ">" after its value: Enter opens a page
+        // list rows with a tick box (add-ons): number shown in front, on/off state, and the
+        // Space / gamepad X toggle and Shift+Up/Down / LB/RB reordering actions
+        int number = 0;                        // 0 = none
+        std::function<int()> check;            // tick box: 1 ticked, 0 empty (empty function = none)
+        std::function<void()> toggle;
+        std::function<void(int)> reorder;      // -1 = move up, +1 = move down
     };
     struct Page {
         std::string title;
         std::vector<Item> items;
         int cursor = 0;
         int scroll = 0;  // first visible row when the page is taller than the panel
+        std::string note;      // a line under the title ("" = none)
+        std::string controls;  // replaces the standard controls line at the bottom ("" = standard)
     };
     enum class Mode { Normal, CaptureKey, CaptureButton, ConfirmDisplay, ConfirmAction };
 
@@ -60,6 +69,10 @@ private:
     Page AudioPage();
     Page ControlsPage();
     Page CheatsPage();
+    Page ModsPage();
+    Page LevelPackPage();
+    Page AddonsPage();
+    Page AddonDetailPage(const std::string& id);
     Page KeysPage();
     Page PadPage();
 
@@ -96,6 +109,7 @@ private:
     void SetMessage(const std::string& m, DWORD ms = 3000);
     void Sound(bool confirm);
     std::string LostLine() const;
+    void DrawTickBox(float x, float y, bool on, bool enabled);
     void AskConfirm(const std::string& title, const std::string& line, std::function<void()> yes);
 
     CD3DApplication* app_;
@@ -124,4 +138,7 @@ private:
     std::string message_;
     DWORD messageUntil_ = 0;
     UIDraw ui_;
+    // mods / level pack changed in this visit: applied (assets reloaded, title restarted) on close
+    bool modsChanged_ = false;
+    bool ModsLocked() const;  // true during a level: mods can only be changed from the title screen
 };

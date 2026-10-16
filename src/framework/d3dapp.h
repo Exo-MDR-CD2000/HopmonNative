@@ -53,6 +53,7 @@ public:
     // the ending, and in-game whenever Hopmon isn't under the player's control).
     virtual bool CanOpenOptions() const { return true; }
     virtual void ReloadMusic() {}                       // music source changed: restart the current track
+    virtual void ApplyModChanges() {}                   // mods or level pack changed (title screen only)
     virtual const char* MusicSource() const { return ""; }
 
 protected:

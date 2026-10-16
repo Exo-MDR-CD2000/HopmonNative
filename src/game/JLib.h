@@ -194,6 +194,7 @@ public:
     JSound(WORD resId, DWORD count);
     virtual ~JSound();
     WORD GetResId() const { return resId; }
+    DWORD GetCount() const { return count; }
     void SetVolume(BYTE v);
     void Play(int loop);
     void Stop();
@@ -217,6 +218,7 @@ public:
     void Play(WORD resId, BYTE volume, int loop);
     void Stop(WORD resId);
     void StopAll();
+    void ReloadAll();  // native (mods): rebuild every sound from its (possibly replaced) source
 
 protected:
     int GetNullIndex();
@@ -231,6 +233,8 @@ public:
     JMidiList();
     virtual ~JMidiList();
     void Append(const char* file);
+    // Native (level packs): the track index for a pack's own music file (added on first use).
+    int TrackFor(const std::string& path);
     void Play(int index);
     void Replay();
     void Pause();

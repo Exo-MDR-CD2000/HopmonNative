@@ -4,6 +4,7 @@
 #include "../core/assets.h"
 #include "../core/config.h"
 #include "../core/log.h"
+#include "../core/mods.h"
 #include "../framework/d3dapp.h"
 #include "../framework/d3dtextr.h"
 #include "../gfx/device.h"
@@ -87,6 +88,11 @@ void OptionsMenu::Open() {
 
 void OptionsMenu::Close() {
     if (!open_) return;
+    if (modsChanged_ && !ModsLocked()) {
+        // mods or the level pack changed: reload everything and restart the title screen
+        modsChanged_ = false;
+        app_->ApplyModChanges();
+    }
     if (mode_ == Mode::ConfirmDisplay) RevertDisplay();
     DiscardPending(false);
     open_ = false;
@@ -111,6 +117,8 @@ void OptionsMenu::ResetAllSettings() {
     fresh.version = old.version;
     fresh.gamePath = old.gamePath;
     fresh.savePath = old.savePath;  // resetting must not move where progress is saved
+    fresh.mods = old.mods;          // installed mods and the chosen level pack stay as they are
+    fresh.modPack = old.modPack;
     c = fresh;
     pendingActive_ = false;
     // apply everything that is not read live every frame
@@ -361,6 +369,8 @@ OptionsMenu::Page OptionsMenu::MainPage() {
                        [this] { PushPage(ControlsPage()); }, nullptr});
     p.items.push_back({"Cheats", "Game modifiers: unlock all levels, infinite fire, no crystal slowdown.", nullptr,
                        nullptr, [this] { PushPage(CheatsPage()); }, nullptr});
+    p.items.push_back({"Mods", "Choose the level pack to play, and switch add-ons on or off.", nullptr, nullptr,
+                       [this] { PushPage(ModsPage()); }, nullptr});
     p.items.push_back({"Reset all settings",
                        "Restore every setting to its default. Saved progress, the game path and the save folder are kept.", nullptr,
                        nullptr,
@@ -771,6 +781,311 @@ OptionsMenu::Page OptionsMenu::ControlsPage() {
     return p;
 }
 
+// ------------------------------------------------------------------ mods
+bool OptionsMenu::ModsLocked() const { return app_->InLevel(); }
+
+namespace {
+std::string Contents(const Mods::ModInfo& m) {
+    std::string s;
+    auto add = [&](bool b, const char* w) {
+        if (b) s += (s.empty() ? "" : ", ") + std::string(w);
+    };
+    add(m.hasLevels && !m.isPack, "levels");
+    add(m.hasTextures, "textures");
+    add(m.hasModels, "models");
+    add(m.hasSounds, "sounds");
+    add(m.hasMusic, "music");
+    return s.empty() ? "nothing yet" : s;
+}
+const Mods::ModInfo* FindMod(const std::string& id) {
+    for (const auto& m : Mods::Installed())
+        if (m.id == id) return &m;
+    return nullptr;
+}
+std::string LevelCount(size_t n) { return std::to_string(n) + (n == 1 ? " level" : " levels"); }
+const char* kLockedHelp = "Change mods from OPTIONS on the title screen.";
+}  // namespace
+
+// OPTIONS > MODS: the level pack in play, the add-ons, and the mods folder.
+OptionsMenu::Page OptionsMenu::ModsPage() {
+    Page p;
+    p.title = "OPTIONS > MODS";
+    auto unlocked = [this] { return !ModsLocked(); };
+    {
+        Item it{"Level pack", "", [] {
+                    const Mods::Pack* pk = Mods::FindPack(Mods::ActivePackId());
+                    return pk && pk->id != "original" ? pk->name : std::string("Original game");
+                },
+                nullptr, [this] { PushPage(LevelPackPage()); }, unlocked};
+        it.focusWhenDisabled = true;
+        it.submenu = true;
+        it.helpFn = [this] {
+            if (ModsLocked()) return std::string(kLockedHelp);
+            size_t n = Mods::LevelPackMods().size();
+            return "The campaign you play: the original game or one of " + std::to_string(n) + " installed level pack" +
+                   (n == 1 ? "" : "s") + ".";
+        };
+        p.items.push_back(it);
+    }
+    {
+        Item it{"Add-ons", "", [] {
+                    auto a = Mods::Addons();
+                    if (a.empty()) return std::string("None installed");
+                    int on = 0;
+                    for (auto* m : a)
+                        if (m->enabled && m->problem.empty()) on++;
+                    return std::to_string(on) + " of " + std::to_string(a.size()) + " on";
+                },
+                nullptr, [this] { PushPage(AddonsPage()); }, unlocked};
+        it.focusWhenDisabled = true;
+        it.submenu = true;
+        it.helpFn = [this] {
+            return ModsLocked() ? std::string(kLockedHelp)
+                                : std::string("New textures, models, sounds and music for whatever you play.");
+        };
+        p.items.push_back(it);
+    }
+    p.items.push_back({"Open the mods folder",
+                       "Level packs go in its 'levelpacks' folder, add-ons in 'addons'. Folders or .zip files.", nullptr,
+                       nullptr,
+                       [] {
+                           Mods::CreateFolders();
+                           std::string url = "file:///" + Mods::ModsFolder();
+                           for (char& c : url)
+                               if (c == '\\') c = '/';
+                           SDL_OpenURL(url.c_str());
+                       },
+                       nullptr});
+    p.items.push_back({"Back", "", nullptr, nullptr, [this] { Back(false); }, nullptr});
+    return p;
+}
+
+// MODS > LEVEL PACK: pick the campaign. Choosing one asks, then reloads at the title screen.
+OptionsMenu::Page OptionsMenu::LevelPackPage() {
+    Page p;
+    p.title = "MODS > LEVEL PACK";
+    auto unlocked = [this] { return !ModsLocked(); };
+    auto choose = [this](const std::string& id, const std::string& name) {
+        return [this, id, name] {
+            if (id == Mods::ActivePackId()) {
+                SetMessage("You're already playing " + name + ".");
+                return;
+            }
+            AskConfirm("Play " + name + "?", "The game reloads and returns to the title screen.", [this, id] {
+                Mods::SetActivePack(id);
+                modsChanged_ = true;
+                Save();
+                Close();  // applies it
+            });
+        };
+    };
+    {
+        const Mods::Pack* orig = Mods::FindPack("original");
+        size_t n = orig ? orig->levels.size() : 45;
+        Item it{"Original game", "", [n] { return Mods::ActivePackId() == "original" ? std::string("Playing") : LevelCount(n); },
+                nullptr, choose("original", "the original game"), unlocked};
+        it.focusWhenDisabled = true;
+        it.helpFn = [this, n] {
+            if (ModsLocked()) return std::string(kLockedHelp);
+            return "Hopmon by Saito Games. " + LevelCount(n) + " in 3 worlds." +
+                   (Mods::ActivePackId() == "original" ? " You're playing it." : " Enter: play it.");
+        };
+        p.items.push_back(it);
+    }
+    auto packs = Mods::LevelPackMods();
+    for (const Mods::ModInfo* m : packs) {
+        std::string id = m->id, name = m->name;
+        Item it{name, "", [id] {
+                    const Mods::ModInfo* mi = FindMod(id);
+                    if (!mi || !mi->problem.empty()) return std::string("Can't use");
+                    if (id == Mods::ActivePackId()) return std::string("Playing");
+                    const Mods::Pack* pk = Mods::FindPack(id);
+                    return pk ? LevelCount(pk->levels.size()) : std::string();
+                },
+                nullptr, nullptr, nullptr};
+        if (m->problem.empty()) {
+            it.activate = choose(id, name);
+            it.enabled = unlocked;
+        } else {
+            it.enabled = [] { return false; };
+        }
+        it.focusWhenDisabled = true;
+        it.helpFn = [this, id] {
+            if (ModsLocked()) return std::string(kLockedHelp);
+            const Mods::ModInfo* mi = FindMod(id);
+            if (!mi) return std::string();
+            if (!mi->problem.empty()) return "Can't be used: " + mi->problem + ".";
+            const Mods::Pack* pk = Mods::FindPack(id);
+            std::string s = mi->author.empty() ? "" : "By " + mi->author + ". ";
+            if (pk) {
+                size_t worlds = 0;
+                std::vector<bool> used(pk->worlds.size(), false);
+                for (int w : pk->levelWorld) used[(size_t)w] = true;
+                for (bool u : used) worlds += u;
+                s += LevelCount(pk->levels.size()) + " in " + std::to_string(worlds) + (worlds == 1 ? " world." : " worlds.");
+            }
+            if (!mi->description.empty()) s += " " + mi->description;
+            s += id == Mods::ActivePackId() ? " You're playing it." : " Enter: play it.";
+            return s;
+        };
+        p.items.push_back(it);
+    }
+    if (packs.empty()) {
+        Item none{"No level packs installed", "Put level packs in the 'levelpacks' folder inside the 'mods' folder.",
+                  nullptr, nullptr, nullptr, [] { return false; }};
+        none.focusWhenDisabled = true;
+        p.items.push_back(none);
+    }
+    p.items.push_back({"Back", "Each level pack keeps its own progress.", nullptr, nullptr, [this] { Back(false); }, nullptr});
+    // start on the pack in play
+    for (size_t i = 0; i < p.items.size(); i++)
+        if ((i == 0 && Mods::ActivePackId() == "original") ||
+            (i > 0 && i <= packs.size() && packs[i - 1]->id == Mods::ActivePackId()))
+            p.cursor = (int)i;
+    return p;
+}
+
+// MODS > ADD-ONS: the add-ons in load order, the top one winning. Space / X ticks one on or off,
+// Shift+Up/Down (PgUp/PgDn, LB/RB) moves it, Enter opens its details.
+OptionsMenu::Page OptionsMenu::AddonsPage() {
+    Page p;
+    p.title = "MODS > ADD-ONS";
+    auto unlocked = [this] { return !ModsLocked(); };
+    auto addons = Mods::Addons();
+    if (!addons.empty()) {
+        p.note = "Higher in the list wins when two add-ons change the same thing.";
+        p.controls = "Space/X: on/off  Enter/A: details  Shift+Up/Down, LB/RB: move";
+    }
+    int n = 0;
+    for (const Mods::ModInfo* m : addons) {
+        std::string id = m->id;
+        Item it{m->name, "", nullptr, nullptr, [this, id] { PushPage(AddonDetailPage(id)); }, unlocked};
+        it.number = ++n;
+        it.check = [id] {
+            const Mods::ModInfo* mi = FindMod(id);
+            return mi && mi->enabled && mi->problem.empty() ? 1 : 0;
+        };
+        it.toggle = [this, id] {
+            const Mods::ModInfo* mi = FindMod(id);
+            if (!mi) return;
+            if (!mi->problem.empty()) {
+                SetMessage("Can't be used: " + mi->problem + ".");
+                return;
+            }
+            Mods::SetEnabled(id, !mi->enabled);
+            modsChanged_ = true;
+            Save();
+        };
+        it.change = [this](int) {  // Left/Right too
+            auto f = Cur().items[(size_t)Cur().cursor].toggle;
+            f();
+        };
+        it.reorder = [this, id](int delta) {
+            auto list = Mods::Addons();
+            int pos = -1;
+            for (size_t k = 0; k < list.size(); k++)
+                if (list[k]->id == id) pos = (int)k;
+            int to = pos + delta;
+            if (pos < 0 || to < 0 || to >= (int)list.size()) {
+                Sound(false);
+                return;
+            }
+            std::string other = list[(size_t)to]->name, name = list[(size_t)pos]->name;
+            Mods::Move(id, delta);
+            modsChanged_ = true;
+            Save();
+            // rebuild the list in its new order, keeping the cursor on the moved add-on
+            Page fresh = AddonsPage();
+            fresh.cursor = to;
+            fresh.scroll = Cur().scroll;
+            Cur() = fresh;
+            Sound(false);
+            SetMessage(delta < 0 ? name + " moved up: it now wins over " + other + "."
+                                 : name + " moved down: " + other + " now wins over it.");
+        };
+        it.focusWhenDisabled = true;
+        it.helpFn = [this, id] {
+            if (ModsLocked()) return std::string(kLockedHelp);
+            const Mods::ModInfo* mi = FindMod(id);
+            if (!mi) return std::string();
+            if (!mi->problem.empty()) return "Can't be used: " + mi->problem + ".";
+            std::string s = mi->description.empty() ? "" : mi->description + " ";
+            if (!mi->author.empty()) s += "By " + mi->author + ". ";
+            return s + "Replaces " + Contents(*mi) + ".";
+        };
+        p.items.push_back(it);
+    }
+    if (addons.empty()) {
+        Item none{"No add-ons installed", "Put add-ons in the 'addons' folder inside the 'mods' folder.", nullptr, nullptr,
+                  nullptr, [] { return false; }};
+        none.focusWhenDisabled = true;
+        p.items.push_back(none);
+    }
+    p.items.push_back({"Back", "Changes apply when you close the menu: the game reloads and returns to the title screen.",
+                       nullptr, nullptr, [this] { Back(false); }, nullptr});
+    return p;
+}
+
+OptionsMenu::Page OptionsMenu::AddonDetailPage(const std::string& id) {
+    Page p;
+    const Mods::ModInfo* m = FindMod(id);
+    p.title = "ADD-ONS > " + (m ? m->name : id);
+    p.controls = "Enter/A, Space/X: on/off  Esc/B: back to the list";
+    auto unlocked = [this] { return !ModsLocked(); };
+    auto info = [&](const std::string& label, const std::string& value) {
+        if (value.empty()) return;
+        Item it{label, "", [value] { return value; }, nullptr, nullptr, [] { return false; }};
+        it.focusWhenDisabled = true;
+        it.helpFn = [id] {
+            const Mods::ModInfo* mi = FindMod(id);
+            return mi && !mi->description.empty() ? mi->description : std::string();
+        };
+        p.items.push_back(it);
+    };
+    if (m) {
+        Item on{"On", "", nullptr, nullptr, nullptr, unlocked};
+        on.check = [id] {
+            const Mods::ModInfo* mi = FindMod(id);
+            return mi && mi->enabled && mi->problem.empty() ? 1 : 0;
+        };
+        on.toggle = [this, id] {
+            const Mods::ModInfo* mi = FindMod(id);
+            if (!mi) return;
+            if (!mi->problem.empty()) {
+                SetMessage("Can't be used: " + mi->problem + ".");
+                return;
+            }
+            Mods::SetEnabled(id, !mi->enabled);
+            modsChanged_ = true;
+            Save();
+        };
+        on.change = [this](int) {
+            auto f = Cur().items[(size_t)Cur().cursor].toggle;
+            f();
+        };
+        on.focusWhenDisabled = true;
+        on.helpFn = [this, id] {
+            if (ModsLocked()) return std::string(kLockedHelp);
+            const Mods::ModInfo* mi = FindMod(id);
+            return mi && !mi->description.empty() ? mi->description : std::string();
+        };
+        p.items.push_back(on);
+        auto addons = Mods::Addons();
+        int pos = 0;
+        for (size_t i = 0; i < addons.size(); i++)
+            if (addons[i]->id == id) pos = (int)i + 1;
+        info("Load order", std::to_string(pos) + " of " + std::to_string(addons.size()));
+        info("Author", m->author);
+        info("Version", m->version);
+        info("Replaces", Contents(*m));
+        info("License", m->license);
+        if (!m->problem.empty()) info("Problem", m->problem);
+        info("Installed as", m->isZip ? "zip file" : "folder");
+    }
+    p.items.push_back({"Back", "", nullptr, nullptr, [this] { Back(false); }, nullptr});
+    return p;
+}
+
 OptionsMenu::Page OptionsMenu::CheatsPage() {
     Page p;
     p.title = "OPTIONS > CHEATS";
@@ -893,9 +1208,11 @@ void OptionsMenu::Change(int d) {
     if (it.enabled && !it.enabled()) return;
     if (!it.change) return;
     std::string before = it.value ? it.value() : "";
-    it.change(d);
+    auto value = it.value;   // copies: the action may rebuild the page, destroying `it`
+    auto change = it.change;
+    change(d);
     // play after the change, so a volume change is heard at the new level
-    if (!it.value || it.value() != before) Sound(false);
+    if (!value || value() != before) Sound(false);
 }
 
 void OptionsMenu::Activate() {
@@ -903,7 +1220,8 @@ void OptionsMenu::Activate() {
     if (it.enabled && !it.enabled()) return;
     if (it.activate) {
         Sound(true);
-        it.activate();
+        auto f = it.activate;  // a copy: opening a page can move the item it belongs to
+        f();
     } else if (it.change) {
         Change(+1);
     }
@@ -985,16 +1303,19 @@ bool OptionsMenu::HandleEvent(const SDL_Event& e) {
     }
 
     // ---- translate to menu actions
-    enum { None, Up, Down, Left, Right, Ok, Cancel, Exit } act = None;
+    enum { None, Up, Down, Left, Right, Ok, Cancel, Exit, Toggle, MoveUp, MoveDown } act = None;
     if (e.type == SDL_EVENT_KEY_DOWN) {
+        const bool shift = (e.key.mod & SDL_KMOD_SHIFT) != 0;
         switch (e.key.scancode) {
-            case SDL_SCANCODE_UP: act = Up; break;
-            case SDL_SCANCODE_DOWN: act = Down; break;
+            case SDL_SCANCODE_UP: act = shift ? MoveUp : Up; break;
+            case SDL_SCANCODE_DOWN: act = shift ? MoveDown : Down; break;
+            case SDL_SCANCODE_PAGEUP: act = MoveUp; break;
+            case SDL_SCANCODE_PAGEDOWN: act = MoveDown; break;
             case SDL_SCANCODE_LEFT: act = Left; break;
             case SDL_SCANCODE_RIGHT: act = Right; break;
+            case SDL_SCANCODE_SPACE: if (!e.key.repeat) act = Toggle; break;  // Ok on rows without a tick box
             case SDL_SCANCODE_RETURN:
             case SDL_SCANCODE_KP_ENTER:
-            case SDL_SCANCODE_SPACE:
             case SDL_SCANCODE_Z: if (!e.key.repeat) act = Ok; break;
             case SDL_SCANCODE_ESCAPE:
             case SDL_SCANCODE_BACKSPACE:
@@ -1010,6 +1331,9 @@ bool OptionsMenu::HandleEvent(const SDL_Event& e) {
             case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: act = Right; break;
             case SDL_GAMEPAD_BUTTON_SOUTH: act = Ok; break;
             case SDL_GAMEPAD_BUTTON_EAST: act = Cancel; break;
+            case SDL_GAMEPAD_BUTTON_WEST: act = Toggle; break;
+            case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER: act = MoveUp; break;
+            case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: act = MoveDown; break;
             case SDL_GAMEPAD_BUTTON_START: act = Exit; break;
             default: break;
         }
@@ -1038,6 +1362,12 @@ bool OptionsMenu::HandleEvent(const SDL_Event& e) {
         }
     }
 
+    // the tick-box/reorder actions only mean something on rows that have them
+    if (mode_ != Mode::Normal || stack_.empty()) {
+        if (act == Toggle) act = e.type == SDL_EVENT_KEY_DOWN ? Ok : None;
+        if (act == MoveUp) act = e.type == SDL_EVENT_KEY_DOWN ? Up : None;
+        if (act == MoveDown) act = e.type == SDL_EVENT_KEY_DOWN ? Down : None;
+    }
     if (mode_ == Mode::ConfirmAction) {
         if (act == Left || act == Right || act == Up || act == Down) {
             confirmChoice_ ^= 1;
@@ -1077,6 +1407,31 @@ bool OptionsMenu::HandleEvent(const SDL_Event& e) {
         return true;
     }
 
+    if (act == Toggle || act == MoveUp || act == MoveDown) {
+        const Item& it = Cur().items[(size_t)Cur().cursor];
+        bool en = !it.enabled || it.enabled();
+        // run copies: an action may rebuild the page, destroying the item it belongs to
+        if (act == Toggle) {
+            if (it.toggle) {
+                if (en) {
+                    Sound(true);
+                    auto f = it.toggle;
+                    f();
+                }
+                return true;
+            }
+            act = e.type == SDL_EVENT_KEY_DOWN ? Ok : None;  // Space works as Enter elsewhere
+        } else {
+            if (it.reorder) {
+                if (en) {
+                    auto f = it.reorder;
+                    f(act == MoveUp ? -1 : +1);
+                }
+                return true;
+            }
+            act = e.type != SDL_EVENT_KEY_DOWN ? None : act == MoveUp ? Up : Down;
+        }
+    }
     switch (act) {
         case Up: Move(-1); break;
         case Down: Move(+1); break;
@@ -1117,6 +1472,20 @@ void OptionsMenu::Update(DWORD nowMs) {
 }
 
 // ------------------------------------------------------------------ drawing
+// A 16 x 16 tick box at (x, y): an outline, with a green tick when on.
+void OptionsMenu::DrawTickBox(float x, float y, bool on, bool enabled) {
+    const UIColor edge = enabled ? kWhite : kGrey;
+    ui_.Rect(x, y, x + 16, y + 2, edge);
+    ui_.Rect(x, y + 14, x + 16, y + 16, edge);
+    ui_.Rect(x, y, x + 2, y + 16, edge);
+    ui_.Rect(x + 14, y, x + 16, y + 16, edge);
+    if (!on) return;
+    const UIColor tick = enabled ? UIColor{0.45f, 0.95f, 0.55f, 1} : kGrey;
+    // two strokes drawn as small squares: down-right from (4,8) to (7,11), then up-right to (12,4)
+    for (int i = 0; i <= 3; i++) ui_.Rect(x + 3 + i, y + 7 + i, x + 5.5f + i, y + 9.5f + i, tick);
+    for (int i = 0; i <= 6; i++) ui_.Rect(x + 6 + i, y + 10 - i, x + 8.5f + i, y + 12.5f - i, tick);
+}
+
 void OptionsMenu::Render(Device* d) {
     if (!open_) return;
     ui_.Begin(d);
@@ -1126,10 +1495,14 @@ void OptionsMenu::Render(Device* d) {
     ui_.Rect(x0, y0, x1, y1, kPanel);
 
     Page& p = Cur();
-    ui_.Text(x0 + 16, y0 + 14, p.title, 3, kGold);
+    ui_.Text(x0 + 16, y0 + 14, Fit(p.title, (size_t)((x1 - x0 - 32) / 24)), 3, kGold);
     ui_.Rect(x0 + 16, y0 + 46, x1 - 16, y0 + 48, UIColor{kBorder.r, kBorder.g, kBorder.b, 0.6f});
 
     float y = y0 + 60;
+    if (!p.note.empty()) {
+        ui_.Text(x0 + 20, y - 4, p.note, 1, kGrey);
+        y += 14;
+    }
     const float rowH = 22;
     // rows that fit above the help text; longer pages scroll to keep the cursor visible
     const int visible = (int)((y1 - 52 - y) / rowH);
@@ -1139,18 +1512,66 @@ void OptionsMenu::Render(Device* d) {
         if (p.cursor < p.scroll) p.scroll = p.cursor;
         if (p.cursor >= p.scroll + visible) p.scroll = p.cursor - visible + 1;
         p.scroll = std::clamp(p.scroll, 0, count - visible);
-        if (p.scroll > 0) ui_.Text(x1 - 28, y0 + 50, "^", 1, kGrey);
-        if (p.scroll + visible < count) ui_.Text(x1 - 28, y + visible * rowH - 6, "v", 1, kGrey);
+    }
+    const bool scrollable = count > visible && visible > 0;
+    if (scrollable) {
+        // scrollbar along the right edge of the list (the same look as the level-select one): the
+        // thumb shows which part of the page is on screen and how much of it fits
+        const float tx0 = x1 - 11, tx1 = x1 - 4, ty0 = y - 4, ty1 = y + visible * rowH - 4;
+        const UIColor track{0.055f, 0.04f, 0.19f, 1}, thumb{1.0f, 0.925f, 0.55f, 1}, shine{1.0f, 1.0f, 0.86f, 1};
+        ui_.Rect(tx0 + 1, ty0, tx1 - 1, ty1, kBorder);  // outline with cut corners
+        ui_.Rect(tx0, ty0 + 1, tx1, ty1 - 1, kBorder);
+        ui_.Rect(tx0 + 1, ty0 + 1, tx1 - 1, ty1 - 1, track);
+        const float h = ty1 - ty0 - 2;
+        float th = std::max(h * visible / count, 10.f);
+        float ty = ty0 + 1 + (h - th) * p.scroll / (count - visible);
+        ui_.Rect(tx0 + 2, ty + 1, tx1 - 2, ty + th - 1, thumb);
+        ui_.Rect(tx0 + 1.5f, ty + 2, tx1 - 1.5f, ty + th - 2, thumb);
+        ui_.Rect(tx0 + 2, ty + 1, tx0 + 3, ty + th - 1, shine);  // highlight along the left side
     }
     for (size_t i = (size_t)p.scroll; i < p.items.size() && (int)i < p.scroll + std::max(visible, 1); i++) {
         const Item& it = p.items[i];
         bool sel = (int)i == p.cursor;
         bool en = !it.enabled || it.enabled();
-        if (sel) ui_.Rect(x0 + 8, y - 3, x1 - 8, y + 19, kSelBar);
-        ui_.Text(x0 + 20, y, it.label, 2, en ? kWhite : kGrey);
+        if (sel) ui_.Rect(x0 + 8, y - 3, scrollable ? x1 - 14 : x1 - 8, y + 19, kSelBar);
+        float labelX = x0 + 20;
+        bool ticked = true;
+        if (it.number > 0) {
+            // numbers right-aligned in a column as wide as the largest one, so names line up
+            int maxNum = 0;
+            for (const Item& o : p.items) maxNum = std::max(maxNum, o.number);
+            float col = ui_.TextWidth(std::to_string(maxNum), 2);
+            std::string num = std::to_string(it.number);
+            ui_.Text(x0 + 20 + col - ui_.TextWidth(num, 2), y, num, 2, sel ? kSelValue : kGrey);
+            labelX = x0 + 20 + col + 10;
+        }
+        if (it.check && it.number > 0) {  // list row: number, tick box, name (greyed when off)
+            ticked = it.check() == 1;
+            DrawTickBox(labelX, y, ticked, en);
+            labelX += 24;
+        } else if (it.check) {  // setting row: the tick box is its value
+            DrawTickBox(x1 - 20 - 16, y, it.check() == 1, en);
+        }
+        // long names (mods can be called anything) are shortened to fit beside the value
+        const bool arrow = !it.value && it.activate && it.label != "Back" && it.label != "Resume game" &&
+                           it.label != "Reset controls" && it.label != "Main menu" && it.label != "Quit game" &&
+                           it.label != "Reset all settings";
+        std::string val;
         if (it.value) {
-            std::string val = it.value();
+            val = it.value();
             if (sel && en && it.change) val = "< " + val + " >";
+            if (it.submenu) val += " >";
+        }
+        const float right = x1 - 20;
+        std::string label = it.label;
+        float room = right - labelX - (it.value ? ui_.TextWidth(val, 2) + 16 : arrow ? 28 : 0);
+        if (ui_.TextWidth(label, 2) > room) label = Fit(label, (size_t)std::max(room / 16.f, 6.f));
+        if (it.value) {
+            float valRoom = right - labelX - ui_.TextWidth(label, 2) - 16;
+            if (ui_.TextWidth(val, 2) > valRoom) val = Fit(val, (size_t)std::max(valRoom / 16.f, 4.f));
+        }
+        ui_.Text(labelX, y, label, 2, en && ticked ? kWhite : kGrey);
+        if (it.value) {
             float w = ui_.TextWidth(val, 2);
             float vx = x1 - 20 - w;
             ui_.Text(vx, y, val, 2, !en ? kGrey : sel ? kSelValue : kValue);
@@ -1161,8 +1582,7 @@ void OptionsMenu::Render(Device* d) {
                 ui_.Rect(bx0, y + 3, bx1, y + 13, UIColor{0.1f, 0.1f, 0.25f, 1});
                 ui_.Rect(bx0, y + 3, bx0 + (bx1 - bx0) * f, y + 13, sel ? kSelValue : kValue);
             }
-        } else if (it.activate && it.label != "Back" && it.label != "Resume game" && it.label != "Reset controls" &&
-                   it.label != "Main menu" && it.label != "Quit game" && it.label != "Reset all settings") {
+        } else if (arrow) {
             ui_.Text(x1 - 20 - 16, y, ">", 2, sel ? kSelValue : kGrey);
         }
         y += rowH;
@@ -1186,8 +1606,9 @@ void OptionsMenu::Render(Device* d) {
     }
     ui_.Text(x0 + 16, y1 - 46, l1, 1, helpColor);
     if (!l2.empty()) ui_.Text(x0 + 16, y1 - 34, Fit(l2, perLine), 1, helpColor);
-    ui_.Text(x0 + 16, y1 - 16, "Arrows/D-pad  Enter/A: select  Esc/B: back  F10/Start: close", 1,
-             kGrey);
+    ui_.Text(x0 + 16, y1 - 16,
+             p.controls.empty() ? std::string("Arrows/D-pad  Enter/A: select  Esc/B: back  F10/Start: close") : p.controls,
+             1, kGrey);
 
     // modal overlays
     auto box = [&](const std::string& title, const std::string& line2) {

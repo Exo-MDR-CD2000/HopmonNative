@@ -295,15 +295,21 @@ bool Init(const std::string& soundFontPath) {
     } else {
         for (const char* cand : {"soundfont.sf2", "hopmon.sf2"}) {
             std::string p1 = std::string(SDL_GetBasePath() ? SDL_GetBasePath() : "") + cand;
-            FILE* f = fopen(p1.c_str(), "rb");
+            FILE* f = OpenFileUtf8(p1.c_str(), "rb");
             if (f) { fclose(f); sf = p1; break; }
             std::string p2 = Assets::ResolveGameFile(cand);
-            f = fopen(p2.c_str(), "rb");
+            f = OpenFileUtf8(p2.c_str(), "rb");
             if (f) { fclose(f); sf = p2; break; }
         }
     }
     if (!sf.empty()) {
-        g_tsf = tsf_load_filename(sf.c_str());
+        {
+            // loaded through SDL, which takes UTF-8 paths on every system
+            size_t n = 0;
+            void* data = SDL_LoadFile(sf.c_str(), &n);
+            g_tsf = data ? tsf_load_memory(data, (int)n) : nullptr;
+            SDL_free(data);
+        }
         if (g_tsf) {
             tsf_set_output(g_tsf, TSF_STEREO_INTERLEAVED, Audio::OutputRate(), 0.0f);
             tsf_set_max_voices(g_tsf, 256);

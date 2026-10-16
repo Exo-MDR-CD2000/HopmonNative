@@ -12,6 +12,8 @@ void Shutdown();
 
 // A "buffer" is the equivalent of one IDirectSoundBuffer: 8-bit unsigned mono PCM.
 int CreateBuffer(const uint8_t* pcm, size_t length, int sampleRate);
+// Native (mods): a replacement sound as float PCM, 1 or 2 channels interleaved, any rate.
+int CreateBufferF32(const float* pcm, size_t frames, int channels, int sampleRate);
 void DestroyBuffer(int handle);
 void Play(int handle, bool loop);          // restarts from current position (see SetPosition)
 void Stop(int handle);

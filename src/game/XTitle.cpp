@@ -1,5 +1,7 @@
 // Port of XTitle.cpp: logo, title menu, level selection, info screen, ending.
 #include "XGame.h"
+#include "../core/mods.h"
+#include <SDL3/SDL.h>
 
 // ============================================================ XTitleBackground
 XTitleBackground::XTitleBackground(XApplication* a) : app(a) {
@@ -319,21 +321,76 @@ void XSelectLevelObject::ProcessFrame(DWORD frameCount) {
         }
     } else {
         if (in->GetKeyboardPressed(DIK_ESCAPE)) keyButton = 1;
-        if (left) {
-            snd->Play(0xec, 100, 0);
-            app->currentLevel = app->currentLevel - 1;
-            if (app->currentLevel < 0) app->currentLevel = app->SelectableLevel();
+        // Native: hold to scroll, Up/Down jump 10. A press acts at once (Left/Right wrap round at
+        // the ends, as in the original); holding repeats after 0.4 s at ~8 steps a second, and
+        // Left/Right speed up to ~30 a second after 2 s. Repeats stop at the ends instead of wrapping.
+        const unsigned long now = (unsigned long)SDL_GetTicks();
+        auto held = [&](int d) -> bool {
+            switch (d) {
+                case -1: return in->GetKeyboardState(DIK_LEFT) || in->GetJoyDirState(0, 3);
+                case 1: return in->GetKeyboardState(DIK_RIGHT) || in->GetJoyDirState(0, 1);
+                case 10: return in->GetKeyboardState(DIK_UP) || in->GetJoyDirState(0, 0);
+                case -10: return in->GetKeyboardState(DIK_DOWN) || in->GetJoyDirState(0, 2);
+            }
+            return 0;
+        };
+        int pressed = left ? -1 : right ? 1 : up ? 10 : down ? -10 : 0;
+        if (pressed) {
+            holdDir = pressed;
+            holdStart = now;
+            nextRepeat = now + 400;
+            lastStepSound = 0;  // a press always clicks
+            StepLevel(pressed, pressed == -1 || pressed == 1);
+        } else if (holdDir && held(holdDir)) {
+            int steps = 0;
+            while (now >= nextRepeat && steps < 4) {
+                bool fast = (holdDir == -1 || holdDir == 1) && now - holdStart >= 2000;
+                nextRepeat += fast ? 33 : 125;
+                StepLevel(holdDir, false);
+                steps++;
+            }
+            if (now >= nextRepeat) nextRepeat = now;  // don't build up a backlog after a pause
+        } else {
+            holdDir = 0;
+        }
+        if (previewDirty && (holdDir == 0 || now - holdStart < 2000)) {
+            previewDirty = false;
             CreatePreviewMap();
-        } else if (right) {
-            snd->Play(0xec, 100, 0);
-            app->currentLevel = app->currentLevel + 1;
-            if (app->SelectableLevel() < app->currentLevel) app->currentLevel = 0;
-            CreatePreviewMap();
-        } else if (keyButton) {
+        }
+        if (!pressed && keyButton) {
             snd->Play(0xed, 100, 0);
             inSelectLevel = 0;
+            holdDir = 0;
+            if (previewDirty) {
+                previewDirty = false;
+                CreatePreviewMap();
+            }
         }
     }
+}
+
+// Native: moves the level choice. A press wraps round at the ends (as the original did);
+// repeats and the 10-level jumps stop at the first/last level.
+void XSelectLevelObject::StepLevel(int delta, bool wrap) {
+    int last = app->SelectableLevel();
+    int cur = app->currentLevel, next = cur + delta;
+    if (wrap) {
+        if (next < 0) next = last;
+        else if (next > last) next = 0;
+    } else {
+        next = next < 0 ? 0 : next > last ? last : next;
+    }
+    if (next == cur) return;
+    app->currentLevel = next;
+    const unsigned long now = (unsigned long)SDL_GetTicks();
+    if (lastStepSound == 0 || now - lastStepSound >= 90) {  // fast scrolling clicks ~11 times a second
+        app->GetSoundList()->Play(0xec, 100, 0);
+        lastStepSound = now ? now : 1;
+    }
+    // while scrolling fast, the preview is rebuilt when it slows or stops
+    bool fast = holdDir != 0 && (unsigned long)SDL_GetTicks() - holdStart >= 2000 && (holdDir == -1 || holdDir == 1);
+    if (fast) previewDirty = true;
+    else CreatePreviewMap();
 }
 
 void XSelectLevelObject::Render() {
@@ -387,6 +444,37 @@ void XSelectLevelObject::Render() {
         rowArrowRight->SetCurrentFrame(0);
         rowArrowRight->SetPosition(rowX + step * (shown - 1) + step + 6, rowY - 2);
         rowArrowRight->Draw(bb);
+    }
+    // Native: a scrollbar under the row for packs longer than the row. The thumb shows which part of
+    // the pack the row is showing (its length is the share that fits), and small marks on the track
+    // show where each of the pack's worlds starts. Not drawn for 45 levels or fewer.
+    if (total > kRowLevels) {
+        const int lx0 = rowX, lx1 = rowX + step * shown;  // the row's extent
+        const int ty0 = rowY + levelLED->GetHeight() + 7, ty1 = ty0 + 7;
+        auto fill = [&](int x0, int y0, int x1, int y1, uint32_t rgb) {
+            if (x1 <= x0 || y1 <= y0) return;
+            RECT r{x0, y0, x1, y1};
+            bb->ColorFill(&r, rgb);
+        };
+        // track: light-blue outline with cut corners, dark inside
+        fill(lx0 + 1, ty0, lx1 - 1, ty1, 0x7399FF);
+        fill(lx0, ty0 + 1, lx1, ty1 - 1, 0x7399FF);
+        fill(lx0 + 1, ty0 + 1, lx1 - 1, ty1 - 1, 0x0E0A30);
+        const int w = lx1 - lx0;
+        // world marks
+        const Mods::Pack& pk = Mods::ActivePack();
+        for (size_t i = 1; i < pk.levelWorld.size() && (int)i < total; i++)
+            if (pk.levelWorld[i] != pk.levelWorld[i - 1]) {
+                int mx = lx0 + (int)((long long)w * (long long)i / total);
+                fill(mx, ty0 + 2, mx + 1, ty1 - 2, 0x5A74C8);
+            }
+        // thumb
+        int tw = (int)((long long)w * kRowLevels / total);
+        if (tw < 12) tw = 12;
+        int tx = lx0 + 1 + (int)((long long)(w - 2 - tw) * first / (total - kRowLevels));
+        fill(tx + 1, ty0 + 1, tx + tw - 1, ty1 - 1, 0xFFEC8C);
+        fill(tx, ty0 + 2, tx + tw, ty1 - 2, 0xFFEC8C);
+        fill(tx + 1, ty0 + 1, tx + tw - 1, ty0 + 2, 0xFFFFDC);  // highlight along the top
     }
     int menuY = cy + 0x6e;
     for (int i = 0; i < 3; i++) {

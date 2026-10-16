@@ -1,4 +1,5 @@
 #include "music_stream.h"
+#include "../core/mods.h"
 #include "audio.h"
 #include "../core/assets.h"
 #include "../core/config.h"
@@ -415,6 +416,10 @@ std::string FindReplacement(int index, const std::string& midiName) {
         if (!flac.empty()) return flac;  // FLAC preferred when both exist
         if (!mp3.empty()) return mp3;
     }
+    // native (mods): your own music folder wins; then the newest enabled mod's music/ folder
+    std::string base = midiName.substr(0, midiName.find_last_of('.'));
+    std::string modFile = Mods::FindFile("music", base, {"flac", "mp3"});
+    if (!modFile.empty()) return modFile;
     return "";
 }
 

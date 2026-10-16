@@ -57,7 +57,14 @@ public:
     void LoadWinRegData();
     void SaveWinRegData();
     void SetState(STATE s) { state = s; }
-    int GetCurrentWorld() const { return currentLevel / 15; }
+    // Native (level packs): the "look" of the current level's world: 0 castle, 1 forest, 2 toy
+    // (for the original game this is currentLevel / 15, as before).
+    int GetCurrentWorld() const;
+    WORD CurrentFloorTexture() const;   // the floor/wall texture of the current level's world
+    void PlayLevelMusic();              // the current world's track
+    // Native (mods): re-reads mods/ and everything they can replace, then restarts the title screen.
+    void ApplyModChanges() override;
+    void CreatePackTextures();
     JDInput* GetDInput() const { return dinput; }
     JMidiList* GetMidiList() const { return midiList; }
     JSoundList* GetSoundList() const { return soundList; }
@@ -75,7 +82,7 @@ public:
     int maxSelLevel;              // real progress (saved in <save dir>/original/progress.ini)
     int SelectableLevel() const;  // highest level offered on level select (cheat-aware)
     const int maxFreeLevel;
-    const int maxLevel;
+    int maxLevel;                 // native: last level index of the active level pack (44 for the original)
 
 protected:
     HRESULT OneTimeSceneInit() override;
@@ -199,6 +206,14 @@ public:
 
 protected:
     void CreatePreviewMap();
+    // Native: holding Left/Right scrolls through the levels, faster the longer it's held, and
+    // Up/Down jump 10 levels (also repeating while held); a tap still moves one level.
+    void StepLevel(int delta, bool wrap);
+    int holdDir = 0;              // -1/+1 Left/Right, -10/+10 Down/Up, 0 = nothing held
+    unsigned long holdStart = 0;  // ms (SDL ticks)
+    unsigned long nextRepeat = 0;
+    unsigned long lastStepSound = 0;
+    bool previewDirty = false;    // the preview waits while scrolling fast
 };
 
 class XRegisterInfoObject : public XProcessObject {

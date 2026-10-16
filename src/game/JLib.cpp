@@ -1,4 +1,5 @@
 #include "JLib.h"
+#include "../core/mods.h"
 #include "../core/assets.h"
 #include "../core/log.h"
 #include "../audio/audio.h"
@@ -71,9 +72,12 @@ void JString::Strip(StripType type, char c) {
 }
 
 int GetStringListFromResource(JStringList& list, int resId) {
-    if (!Assets::RCData((uint32_t)(resId & 0xFFFF))) return 0;
+    // native (mods): level text comes through the mod framework (a pack's level, a mod's
+    // replacement of an original level, or the original resource)
+    std::string text = Mods::LevelText((uint32_t)(resId & 0xFFFF));
+    if (text.empty()) return 0;
     list.Empty();
-    JString all(Assets::RCDataCString((uint32_t)(resId & 0xFFFF)));
+    JString all(text.c_str());
     unsigned pos = 0;
     while (pos < all.Length()) {
         int nl = all.FindChar('\n', pos);
@@ -302,6 +306,14 @@ void JSound::Stop() {
 }
 
 void JSound::CreateWaveData(WORD id) {
+    // Native: a mod's replacement (WAV / OGG / FLAC at its own quality) comes first
+    std::vector<float> pcm;
+    int channels = 1, rate = 22050;
+    if (Assets::LoadModSound(id, &pcm, &channels, &rate)) {
+        for (DWORD i = 0; i < count; i++)
+            bufferList.push_back(Audio::CreateBufferF32(pcm.data(), pcm.size() / channels, channels, rate));
+        return;
+    }
     const auto* res = Assets::Wave(id);
     if (!res || res->size() < 12) {
         Log("Sound resource %u missing", id);
@@ -368,6 +380,17 @@ void JSoundList::Stop(WORD id) {
     if (i >= 0) soundArray[i]->Stop();
 }
 
+void JSoundList::ReloadAll() {
+    for (auto*& s : soundArray) {
+        if (!s) continue;
+        WORD id = s->GetResId();
+        DWORD c = s->GetCount();
+        s->Stop();
+        delete s;
+        s = new JSound(id, c);
+    }
+}
+
 void JSoundList::StopAll() {
     for (auto* s : soundArray)
         if (s) s->Stop();
@@ -394,6 +417,13 @@ JMidiList::~JMidiList() {
 
 void JMidiList::Append(const char* file) { midiFileList->Append(JString(file)); }
 
+int JMidiList::TrackFor(const std::string& path) {
+    for (DWORD i = 0; i < midiFileList->Count(); i++)
+        if (midiFileList->GetString(i).str() == path) return (int)i;
+    Append(path.c_str());
+    return (int)midiFileList->Count() - 1;
+}
+
 // Native addition: each track can be replaced by an MP3/FLAC file in the "music" folder
 // (MusicStream::FindReplacement). The game's calls - play, replay at the end, pause, resume,
 // stop - are routed to whichever player has the current track, so both behave identically.
@@ -402,6 +432,25 @@ void JMidiList::Play(int index) {
     if (index < 0 || index >= (int)midiFileList->Count() || currentMidiIndex == index) return;
     Stop();
     std::string name = midiFileList->GetString(index).str();
+    // native (level packs): a track added with a full path is a pack's own music file
+    bool fullPath = !name.empty() && (name[0] == '/' || name[0] == '\\' || (name.size() > 1 && name[1] == ':'));
+    if (fullPath) {
+        std::string ext = name.substr(name.find_last_of('.') + 1);
+        for (char& c : ext) c = (char)tolower((unsigned char)c);
+        if (ext == "mid" || ext == "midi") {
+            if (Midi::Open(name)) Midi::PlayFromStart();
+        } else if (MusicStream::Open(name)) {
+            streaming = true;
+            Log("Music: pack track plays %s (%s)", name.c_str(), MusicStream::Describe().c_str());
+            MusicStream::PlayFromStart();
+        }
+        currentMidiIndex = index;
+        if (paused) {
+            if (streaming) MusicStream::Pause();
+            else Midi::Pause();
+        }
+        return;
+    }
     std::string file = MusicStream::FindReplacement(index, name);
     if (!file.empty() && MusicStream::Open(file)) {
         streaming = true;
@@ -413,6 +462,9 @@ void JMidiList::Play(int index) {
     }
     if (!file.empty()) Log("Music: track %d falls back to %s", index + 1, name.c_str());
     std::string path = Assets::ResolveGameFile(name);
+    // native (mods): a mod may replace the MIDI file itself
+    std::string modMidi = Mods::FindFile("music", name.substr(0, name.find_last_of('.')), {"mid", "midi"});
+    if (!modMidi.empty()) path = modMidi;
     if (Midi::Open(path)) Midi::PlayFromStart();
     currentMidiIndex = index;
     if (paused) Midi::Pause();

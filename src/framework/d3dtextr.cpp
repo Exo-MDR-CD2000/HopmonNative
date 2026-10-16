@@ -111,6 +111,20 @@ void D3DTextr_RestoreAllTextures() {
     for (auto& kv : g_textures) Restore(kv.second);
 }
 
+void D3DTextr_ReloadAll() {
+    for (auto it = g_textures.begin(); it != g_textures.end();) {
+        delete it->second.tex;
+        it->second.tex = nullptr;
+        if (it->first >= 0x8000) {
+            it = g_textures.erase(it);
+            continue;
+        }
+        Image img;
+        if (Assets::LoadBitmapImage(it->first, &img)) it->second.image = std::move(img);
+        ++it;
+    }
+}
+
 void D3DTextr_FreeAll() {
     D3DTextr_InvalidateAllTextures();
     g_textures.clear();
@@ -121,8 +135,8 @@ Surface* DDLoadBitmap(WORD resId, int* width, int* height) {
     *height = -1;
     Image img;
     if (!Assets::LoadBitmapImage(resId, &img)) return nullptr;
-    *width = img.width;
-    *height = img.height;
+    *width = img.LogicalWidth();
+    *height = img.LogicalHeight();
     return new Surface(img);
 }
 

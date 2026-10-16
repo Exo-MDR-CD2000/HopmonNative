@@ -9,6 +9,8 @@ namespace {
 struct Buffer {
     bool used = false;
     std::vector<uint8_t> data;
+    std::vector<float> fdata;  // float PCM (mod sounds); used instead of data when not empty
+    int channels = 1;
     int rate = 22050;
     double pos = 0;
     bool playing = false;
@@ -31,9 +33,36 @@ void SDLCALL Callback(void*, SDL_AudioStream* stream, int additional, int) {
     {
         std::lock_guard<std::mutex> lk(g_mutex);
         for (auto& b : g_buffers) {
-            if (!b.used || !b.playing || b.data.empty()) continue;
+            if (!b.used || !b.playing || (b.data.empty() && b.fdata.empty())) continue;
             double step = (double)b.rate / g_rate;
             float g = b.gain * g_sfx;
+            if (!b.fdata.empty()) {
+                // float PCM, mono or stereo, linear interpolation
+                const int ch = b.channels;
+                const size_t n = b.fdata.size() / ch;
+                for (int i = 0; i < frames; i++) {
+                    size_t ip = (size_t)b.pos;
+                    if (ip >= n) {
+                        if (b.loop) {
+                            b.pos -= (double)n;
+                            ip = (size_t)b.pos;
+                        } else {
+                            b.playing = false;
+                            b.pos = 0;
+                            break;
+                        }
+                    }
+                    size_t ip2 = ip + 1 < n ? ip + 1 : (b.loop ? 0 : ip);
+                    float f = (float)(b.pos - (double)ip);
+                    for (int c = 0; c < 2; c++) {
+                        int cc = ch == 1 ? 0 : c;
+                        float s0 = b.fdata[ip * ch + cc], s1 = b.fdata[ip2 * ch + cc];
+                        g_mix[i * 2 + c] += (s0 + (s1 - s0) * f) * g;
+                    }
+                    b.pos += step;
+                }
+                continue;
+            }
             size_t n = b.data.size();
             for (int i = 0; i < frames; i++) {
                 size_t ip = (size_t)b.pos;
@@ -106,6 +135,21 @@ int CreateBuffer(const uint8_t* pcm, size_t length, int sampleRate) {
     b = Buffer();
     b.used = true;
     b.data.assign(pcm, pcm + length);
+    b.rate = sampleRate;
+    return (int)i;
+}
+
+int CreateBufferF32(const float* pcm, size_t frames, int channels, int sampleRate) {
+    std::lock_guard<std::mutex> lk(g_mutex);
+    size_t i = 0;
+    for (; i < g_buffers.size(); i++)
+        if (!g_buffers[i].used) break;
+    if (i == g_buffers.size()) g_buffers.emplace_back();
+    Buffer& b = g_buffers[i];
+    b = Buffer();
+    b.used = true;
+    b.channels = channels == 2 ? 2 : 1;
+    b.fdata.assign(pcm, pcm + frames * (size_t)b.channels);
     b.rate = sampleRate;
     return (int)i;
 }

@@ -1,17 +1,14 @@
 // Port of XMap.cpp: level table, XCamera, XPreviewMap (level select), XMap.
 #include "XGame.h"
+#include "../core/mods.h"
 #include "../framework/d3dutil.h"
 #include "../gfx/device.h"
 
+// Native (level packs): the level resource of the current level in the active pack (for the
+// original game, the same table as before: castle, forest and toy world, 15 levels each).
 WORD GetMapResId(XApplication* app) {
-    static const WORD world0[15] = {0x11c, 0x115, 0x116, 0x117, 0x118, 0x119, 0x11a, 0x11b,
-                                    0x114, 0x109, 0x10a, 0x10b, 0x10c, 0x10d, 0x10e};
-    int world = app->GetCurrentWorld();
-    int stage = app->currentLevel % 15;
-    if (stage < 0 || stage > 14) return 0x11c;
-    if (world == 0) return world0[stage];
-    if (world == 1) return (WORD)(0x11d + stage);
-    if (world == 2) return (WORD)(300 + stage);
+    const Mods::Pack& p = Mods::ActivePack();
+    if (app->currentLevel >= 0 && app->currentLevel < (int)p.levels.size()) return p.levels[app->currentLevel];
     return 0x11c;
 }
 
@@ -309,9 +306,7 @@ JObject3D* MergeObjects(CD3DApplication* app, JObject3DList& tempObjList, WORD t
 // ============================================================ XPreviewMap
 XPreviewMap::XPreviewMap(XApplication* a, int resId)
     : app(a), mapArray(nullptr), mapObject(nullptr), chipSize(10.0f), mapSizeX(0), mapSizeZ(0), mapTextureId(0) {
-    if (app->GetCurrentWorld() == 0) mapTextureId = 0x9c;
-    else if (app->GetCurrentWorld() == 1) mapTextureId = 0xfb;
-    else mapTextureId = 0xfc;
+    mapTextureId = app->CurrentFloorTexture();  // native: castle 0x9c, forest 0xfb, toy 0xfc, or a pack's own
     _LoadMapArray(resId);
     _CreateMapObject();
     mapObject->RotateBy(JAXIS_X, -0.5235988f);
@@ -388,9 +383,7 @@ void XPreviewMap::_CreateMapObject() {
 XMap::XMap(XApplication* a, int resId, XPac* pac, XEnemyList* enemies, XMapObjectList* objects, XCrystalList* crystals)
     : app(a), mapArray(nullptr), enemyMapArray(nullptr), ufoMapArray(nullptr), mapObject(nullptr),
       background(nullptr), chipSize(40.0f), mapSizeX(0), mapSizeZ(0), mapTextureId(0) {
-    if (app->GetCurrentWorld() == 0) mapTextureId = 0x9c;
-    else if (app->GetCurrentWorld() == 1) mapTextureId = 0xfb;
-    else mapTextureId = 0xfc;
+    mapTextureId = app->CurrentFloorTexture();  // native: castle 0x9c, forest 0xfb, toy 0xfc, or a pack's own
     _LoadMapArray(resId);
     _CreateMapObject(pac, enemies, objects, crystals);
     _CreateBackground();

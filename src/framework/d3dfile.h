@@ -7,11 +7,13 @@
 #include <memory>
 
 class Device;
+class Texture;
 
 struct MeshMaterialData {
     D3DMATERIAL7 mtrl{};
     std::string texture;
     DWORD numIndices = 0;
+    std::shared_ptr<Texture> tex;  // native (mods): a glTF model's own texture, drawn with the material
 };
 
 class CD3DFileObject {
@@ -34,6 +36,10 @@ public:
     CD3DFile();
     ~CD3DFile();
     HRESULT LoadFromResource(WORD resId);
+    // Native (mods): forget every loaded model so the next load picks up mod changes.
+    static void ClearCache();
+    // Native (asset export): the original model as a glTF binary (.glb) file.
+    static bool ExportOriginalGlb(WORD resId, std::vector<uint8_t>* out);
     HRESULT Render(Device* dev);
     void Scale(float s);
     void Shift(const D3DVECTOR& v);

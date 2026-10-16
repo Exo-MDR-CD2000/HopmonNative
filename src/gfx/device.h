@@ -19,11 +19,14 @@ public:
     int Height() const { return height_; }
     GLuint Id() const { return id_; }
     bool HasMips() const { return mips_; }
+    // A mod image with its own transparency (originals only have colour-key cut-outs).
+    bool SoftAlpha() const { return softAlpha_; }
 
 private:
     int width_ = 0, height_ = 0;
     GLuint id_ = 0;
     bool mips_ = false;
+    bool softAlpha_ = false;
 };
 
 // Emulates a DirectDraw off-screen surface holding a sprite sheet.
@@ -31,8 +34,8 @@ class Surface {
 public:
     explicit Surface(const Image& img);
     ~Surface();
-    int Width() const { return image_.width; }
-    int Height() const { return image_.height; }
+    int Width() const { return image_.LogicalWidth(); }    // layout size (= the original's)
+    int Height() const { return image_.LogicalHeight(); }
     // COLORREF semantics of the original DDSetColorKey: CLR_INVALID = use pixel (0,0)
     void SetColorKey(COLORREF key);
     void ClearColorKey();
@@ -141,7 +144,7 @@ private:
     struct Uniforms {
         GLint world, view, proj, lighting, matDiffuse, matAmbient, matEmissive, ambient, lightOn, lightDir,
             lightDiffuse, flat, texOn, colorOp, colorArg1, colorArg2, alphaOp, alphaArg1, alphaArg2, alphaTest,
-            hasVertexColor, perPixel, tex, constColor, screen2D, viewport2D;
+            hasVertexColor, perPixel, tex, constColor, screen2D, viewport2D, alphaFix;
     } u_{};
     GLint presentTexLoc_ = -1, presentGammaLoc_ = -1;
 

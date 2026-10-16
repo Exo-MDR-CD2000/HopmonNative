@@ -16,6 +16,9 @@ void D3DTextr_InvalidateAllTextures();
 void D3DTextr_InvalidateTexture(WORD resId);  // rebuild one texture on next use (settings changed)
 void D3DTextr_RestoreAllTextures();
 void D3DTextr_FreeAll();
+// Native (mods): re-read every texture's image (a mod may now replace it) and drop textures of
+// mod-only images (their ids are handed out afresh when mods are re-read).
+void D3DTextr_ReloadAll();
 
 // ddutil.cpp
 Surface* DDLoadBitmap(WORD resId, int* width, int* height);

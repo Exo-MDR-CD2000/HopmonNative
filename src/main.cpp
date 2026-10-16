@@ -3,6 +3,8 @@
 #include "core/config.h"
 #include "core/log.h"
 #include "core/saves.h"
+#include "core/mods.h"
+#include "core/export_assets.h"
 #include "audio/audio.h"
 #include "audio/midi.h"
 #include "audio/music_stream.h"
@@ -95,10 +97,15 @@ int main(int argc, char** argv) {
     }
     std::string gamePath = cfg.gamePath;
     bool allowUnverified = false, platformTest = false;
+    std::string exportFolder;  // --export-assets [folder]
     for (size_t i = 0; i < args.size(); i++) {
         if (args[i] == "--game" && i + 1 < args.size()) gamePath = args[++i];
         else if (args[i] == "--allow-unverified") allowUnverified = true;
         else if (args[i] == "--platform-test") platformTest = true;
+        else if (args[i] == "--export-assets") {
+            exportFolder = (i + 1 < args.size() && args[i + 1].rfind("--", 0) != 0) ? args[++i] : basePath + "export";
+            if (!exportFolder.empty() && exportFolder.back() != '/' && exportFolder.back() != '\\') exportFolder += '/';
+        }
         else if (args[i] == "--windowed") cfg.fullscreen = FullscreenMode::Windowed;
         else if (args[i] == "--fullscreen") cfg.fullscreen = FullscreenMode::Borderless;
         else if (args[i] == "--size" && i + 2 < args.size()) {
@@ -110,7 +117,7 @@ int main(int argc, char** argv) {
             size_t dot = kv.find('.'), eq = kv.find('=');
             if (dot != std::string::npos && eq != std::string::npos) {
                 std::string tmp = basePath + "hopmon_native.override.ini";
-                FILE* f = fopen(tmp.c_str(), "w");
+                FILE* f = OpenFileUtf8(tmp.c_str(), "w");
                 if (f) {
                     fprintf(f, "[%s]\n%s = %s\n", kv.substr(0, dot).c_str(), kv.substr(dot + 1, eq - dot - 1).c_str(),
                             kv.substr(eq + 1).c_str());
@@ -130,6 +137,17 @@ int main(int argc, char** argv) {
     Saves::Init();
     std::string err;
     if (!Assets::Init(gamePath, allowUnverified, &err)) FatalError("Hopmon", "%s", err.c_str());
+    Mods::Init();
+    if (!exportFolder.empty()) {
+        // tool mode: write the assets and exit, without opening the game window
+        int n = ExportAssets::Run(exportFolder);
+        SDL_ShowSimpleMessageBox(n ? SDL_MESSAGEBOX_INFORMATION : SDL_MESSAGEBOX_ERROR, "Hopmon Native",
+                                 n ? ("Exported " + std::to_string(n) + " files to\n" + exportFolder).c_str()
+                                   : "The export failed; see hopmon_native.log.",
+                                 nullptr);
+        SDL_Quit();
+        return n ? 0 : 1;
+    }
     Audio::Init();
     Audio::SetMasterVolumes(cfg.masterVolume / 100.f, cfg.sfxVolume / 100.f, cfg.musicVolume / 100.f);
     Midi::Init(cfg.soundFont);

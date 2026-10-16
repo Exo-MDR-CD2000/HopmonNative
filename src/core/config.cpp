@@ -32,7 +32,7 @@ static bool toBool(const std::string& v) {
 bool Config::Load(const std::string& file) {
     path = file;
     size_t seen = 0;
-    FILE* f = fopen(file.c_str(), "r");
+    FILE* f = OpenFileUtf8(file.c_str(), "r");
     if (!f) return false;
     char line[1024];
     std::string section;
@@ -110,6 +110,17 @@ bool Config::Load(const std::string& file) {
             else if (k == "infinite_fire_energy") infiniteFireEnergy = toBool(v);
             else if (k == "no_crystal_slowdown") noCrystalSlowdown = toBool(v);
             else seen = before;
+        } else if (section == "mods") {
+            if (k == "pack") modPack = v.empty() ? "original" : v;
+            else {
+                bool found = false;
+                for (auto& m : mods)
+                    if (m.first == k) {
+                        m.second = toBool(v);
+                        found = true;
+                    }
+                if (!found) mods.push_back({k, toBool(v)});
+            }
         } else if (section == "game") {
             if (k == "path") gamePath = v;
             else if (k == "save_path") savePath = v;
@@ -121,12 +132,14 @@ bool Config::Load(const std::string& file) {
             Log("Config: ignoring unknown setting '%s' in [%s]", k.c_str(), section.c_str());
     }
     fclose(f);
+    // config_version 14: [mods] lists add-ons with the winner first (it was last before)
+    if (version > 0 && version < 14) std::reverse(mods.begin(), mods.end());
     return true;
 }
 
 bool Config::Save() const {
     if (path.empty()) return false;
-    FILE* f = fopen(path.c_str(), "w");
+    FILE* f = OpenFileUtf8(path.c_str(), "w");
     if (!f) return false;
     auto P = [&](const char* text) { fputs(text, f); };
     P("; ===========================================================================\n"
@@ -340,9 +353,9 @@ bool Config::Save() const {
       "; Game modifiers. All off by default; with them off the game plays exactly\n"
       "; like the original.\n"
       ";\n"
-      "; unlock_all_levels: 1 = every level (1-45) can be chosen on the level-select\n"
-      ";   screen. Your real progress (the highest level you have reached, which the\n"
-      ";   original Hopmon.exe shares) is not changed, so turning this off again\n"
+      "; unlock_all_levels: 1 = every level can be chosen on the level-select\n"
+      ";   screen, in the original game and in level packs. Your real progress (the\n"
+      ";   highest level you have reached) is not changed, so turning this off again\n"
       ";   brings back exactly the levels you had unlocked. Default 0.\n");
     fprintf(f, "unlock_all_levels = %d\n\n", unlockAllLevels ? 1 : 0);
     P("; infinite_fire_energy: 1 = the fire gauge is always full, so Hopmon can\n"
@@ -353,6 +366,16 @@ bool Config::Save() const {
       ";   every hop takes the normal 0.4 seconds however many he carries.\n"
       ";   Default 0.\n");
     fprintf(f, "no_crystal_slowdown = %d\n", noCrystalSlowdown ? 1 : 0);
+    P("\n[mods]\n"
+      "; Level packs go in mods/levelpacks/, add-ons in mods/addons/ (next to this program);\n"
+      ";   see MODDING.md. Easiest: Options > Mods on the title screen.\n"
+      "; pack: the level pack to play. original = the original 45 levels (default);\n"
+      ";   otherwise the id of an installed level pack.\n");
+    fprintf(f, "pack = %s\n", modPack.c_str());
+    P("; One line per installed add-on, in load order: <add-on id> = on / off. When two\n"
+      ";   add-ons replace the same thing, the one higher up wins (as in the menu). New\n"
+      ";   add-ons are added at the end, switched on.\n");
+    for (auto& m : mods) fprintf(f, "%s = %s\n", m.first.c_str(), m.second ? "on" : "off");
     fclose(f);
     return true;
 }

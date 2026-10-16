@@ -50,6 +50,9 @@ struct Config {
 
     std::string gamePath;      // optional explicit path to Hopmon.exe
     std::string savePath;      // [game] save_path: empty = the per-user data folder (see core/saves.h)
+    // [mods]: installed add-ons in load order (first wins) with on/off, and the level pack to play
+    std::vector<std::pair<std::string, bool>> mods;
+    std::string modPack = "original";
     // [cheats] (off by default; also in the pause menu)
     bool unlockAllLevels = false;     // every level selectable; saved progress is left untouched
     bool infiniteFireEnergy = false;  // fire gauge always full: fire on every press (max 3 shots on screen)
@@ -57,7 +60,7 @@ struct Config {
 
     std::string path;
     int version = 0;                    // config_version found in the file (0 = older file)
-    static constexpr int kCurrentVersion = 12;
+    static constexpr int kCurrentVersion = 14;
     bool Load(const std::string& file);
     bool Save() const;
 };

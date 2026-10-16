@@ -348,9 +348,7 @@ void XGameObject::Render() {
 }
 
 void XGameObject::InitLevel() {
-    if (app->GetCurrentWorld() == 0) app->GetMidiList()->Play(1);
-    else if (app->GetCurrentWorld() == 1) app->GetMidiList()->Play(2);
-    else app->GetMidiList()->Play(3);
+    app->PlayLevelMusic();  // native: the world's track (Music02/03/04 for the original's worlds)
     pac->Reset();
     enemyList->Empty();
     mapObjList->Empty();

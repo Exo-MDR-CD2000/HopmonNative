@@ -1,4 +1,5 @@
 #include "pe_resources.h"
+#include "log.h"
 #include <cstdio>
 #include <cstring>
 
@@ -8,7 +9,7 @@ static uint32_t rd32(const std::vector<uint8_t>& b, size_t o) {
 }
 
 bool PEResources::Load(const std::string& path, std::string* error) {
-    FILE* f = fopen(path.c_str(), "rb");
+    FILE* f = OpenFileUtf8(path.c_str(), "rb");
     if (!f) { if (error) *error = "cannot open " + path; return false; }
     std::vector<uint8_t> bytes;
     fseek(f, 0, SEEK_END);

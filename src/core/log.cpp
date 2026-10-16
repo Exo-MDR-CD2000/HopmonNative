@@ -3,10 +3,29 @@
 #include <cstdio>
 #include <cstdlib>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <string>
+#endif
+
 static FILE* g_log = nullptr;
 
+FILE* OpenFileUtf8(const char* path, const char* mode) {
+#ifdef _WIN32
+    auto wide = [](const char* s) {
+        int n = MultiByteToWideChar(CP_UTF8, 0, s, -1, nullptr, 0);
+        std::wstring w(n > 0 ? (size_t)n : 1, L'\0');
+        if (n > 0) MultiByteToWideChar(CP_UTF8, 0, s, -1, &w[0], n);
+        return w;
+    };
+    return _wfopen(wide(path).c_str(), wide(mode).c_str());
+#else
+    return fopen(path, mode);
+#endif
+}
+
 void LogInit(const char* path) {
-    if (path) g_log = fopen(path, "w");
+    if (path) g_log = OpenFileUtf8(path, "w");
 }
 
 void Log(const char* fmt, ...) {
