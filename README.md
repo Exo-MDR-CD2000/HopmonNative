@@ -114,28 +114,35 @@ The original game logic runs unchanged, at its 100 steps per second. Everything 
 
 ## Building
 
-The project uses CMake (3.20 or newer) and C++17. If SDL3 isn't installed, CMake downloads SDL
-`release-3.4.18` from GitHub and links it statically, so the result is a single self-contained
-executable.
+**Quick build (Windows)**
 
-**Windows (Visual Studio 2022)**
+1. Install [Visual Studio](https://visualstudio.microsoft.com/) 2022 or newer (the free Community
+   edition is fine) with the **Desktop development with C++** workload.
+2. Double-click `make_release.bat`.
 
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-```
+That's it. The script finds Visual Studio on its own and downloads SDL3 the first time. When it
+finishes, the `build` folder contains:
 
-`build_windows.bat` runs these two commands for you. The result is `build\Release\HopmonNative.exe`.
+- `HopmonNative.exe`: copy it next to your `Hopmon.exe` and run it.
+- `HopmonNative-x.y.z-windows-x64.zip`: the exe packaged with the README, CONFIG, CHANGELOG and
+  license files, ready to share.
 
-**Making a release**
+`build_windows.bat` does the same but skips the zip.
 
-1. Set the new version in `CMakeLists.txt` (`project(HopmonNative VERSION x.y.z ...)`). It's the only
-   place the version is set: the exe's version info, the log and the zip name all use it.
-2. Add a section for it at the top of `CHANGELOG.md`.
-3. Run `make_release.bat`. It builds the exe and creates `build\HopmonNative-x.y.z-windows-x64.zip`,
-   containing the exe, README, CONFIG, CHANGELOG and license files.
-4. Commit, tag `vx.y.z`, push, and publish a GitHub release with the zip attached and the changelog
-   section as its notes.
+**Windows without Visual Studio (MSYS2)**
+
+1. Install [MSYS2](https://www.msys2.org/) and open the **MSYS2 UCRT64** shell from the Start menu.
+2. Install the tools (one time only):
+   ```sh
+   pacman -S --needed git mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja
+   ```
+3. Go to the project folder and build:
+   ```sh
+   cd /c/path/to/HopmonNative
+   ./build_msys2.sh release
+   ```
+
+The exe and zip end up in the `build-msys2` folder. Leave out `release` to build only the exe.
 
 **Linux / macOS**
 
@@ -146,6 +153,15 @@ cmake --build build -j
 ```
 
 On Linux and macOS, music needs a SoundFont: put `soundfont.sf2` next to the program or the game.
+
+**Publishing a new version (maintainers)**
+
+1. Set the new version in `CMakeLists.txt` (`project(HopmonNative VERSION x.y.z ...)`). It's the only
+   place the version is set: the exe's version info, the log and the zip name all use it.
+2. Add a section for it at the top of `CHANGELOG.md`.
+3. Run `make_release.bat` to build the zip.
+4. Commit, tag `vx.y.z`, push, and publish a GitHub release with the zip attached and the changelog
+   section as its notes.
 
 ## How it works
 

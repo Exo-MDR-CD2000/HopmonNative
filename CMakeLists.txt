@@ -59,11 +59,22 @@ endif()
 
 if(MSVC)
   target_compile_options(HopmonNative PRIVATE /W3 /utf-8 /fp:precise)
+  # The program's entry point is main(), but a Windows GUI app (no console) makes the MSVC linker
+  # look for WinMain. Start from main() instead (MinGW does this on its own).
+  target_link_options(HopmonNative PRIVATE /ENTRY:mainCRTStartup)
 else()
   target_compile_options(HopmonNative PRIVATE -Wall -Wno-unused-parameter -Wno-sign-compare -ffp-contract=off)
   if(NOT WIN32)
     target_link_libraries(HopmonNative PRIVATE m pthread)
   endif()
+endif()
+
+if(MINGW)
+  # MSYS2 / MinGW-w64: link the GCC runtime (libstdc++, libgcc, winpthread) statically so the exe
+  # runs on its own instead of needing DLLs from the MSYS2 folder next to it.
+  target_link_options(HopmonNative PRIVATE -static)
+  # windres looks for the icon relative to the build folder, so point it at res/ as well
+  set_property(SOURCE res/hopmon_native.rc APPEND PROPERTY INCLUDE_DIRECTORIES ${CMAKE_SOURCE_DIR}/res)
 endif()
 
 # Copy SDL3.dll next to the executable when SDL is linked dynamically
