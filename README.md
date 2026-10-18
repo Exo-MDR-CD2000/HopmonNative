@@ -16,8 +16,7 @@ quality-of-life options. With every option at its default, the game plays exactl
   - Before starting, the program checks the SHA-256 of `Hopmon.exe` against this value:
     `6f4acb933e1692d97cc18819204c605287f72a71b9f62e1210ff8908be85930b`
   - Other builds are refused unless you start with `--allow-unverified`.
-- **Windows 10/11** (x64) with an OpenGL 3.3 graphics driver. It also builds and runs on Linux and
-  macOS; see [Building](#building).
+- **Windows 10/11** (x64) with an OpenGL 3.3 graphics driver. See [Building](#building).
 
 ## Download
 
@@ -143,16 +142,6 @@ finishes, the `build` folder contains:
    ```
 
 The exe and zip end up in the `build-msys2` folder. Leave out `release` to build only the exe.
-
-**Linux / macOS**
-
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-./build/HopmonNative --game /path/to/Hopmon.exe
-```
-
-On Linux and macOS, music needs a SoundFont: put `soundfont.sf2` next to the program or the game.
 
 **Publishing a new version (maintainers)**
 
